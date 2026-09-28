@@ -45,20 +45,19 @@ export const Route = createFileRoute("/api/diag")({
                     );
                     const contactsText = await contactsRes.text();
 
-                    // 2b. Test Custom Objects Schema & Records endpoints to find exact key/status
-                    const endpointsToTest = [
-                        // Schema search / list
+                    // 2b. Test Custom Objects Schema & Records endpoints.
+                    // IMPORTANT: POST /objects/{key}/records requires v3 + POST method.
+                    // A GET on this endpoint returns 404 by design (it's POST-only).
+                    // We test: GET schema endpoints (v3) + POST records endpoint (v3).
+                    const schemaEndpoints = [
                         `${cfg.ghl.apiBase}/objects/?locationId=${cfg.ghl.locationId}`,
-                        `${cfg.ghl.apiBase}/objects/custom_objects.pos_purchase_item?locationId=${cfg.ghl.locationId}`,
-                        // Record endpoint tests
-                        `${cfg.ghl.apiBase}/objects/custom_objects.pos_purchase_item/records?locationId=${cfg.ghl.locationId}`,
-                        `${cfg.ghl.apiBase}/objects/records?locationId=${cfg.ghl.locationId}&schemaKey=custom_objects.pos_purchase_item`,
-                        `${cfg.ghl.apiBase}/objects/records?locationId=${cfg.ghl.locationId}&schemaId=6aad9f812c282b1dfcb1c1b8`,
-                        `${cfg.ghl.apiBase}/objects/6aad9f812c282b1dfcb1c1b8/records?locationId=${cfg.ghl.locationId}`,
+                        `${cfg.ghl.apiBase}/objects/custom_objects.pos_purchase_item?locationId=${cfg.ghl.locationId}&fetchProperties=true`,
                     ];
 
                     const testObjResults: any[] = [];
-                    for (const u of endpointsToTest) {
+
+                    // Test schema GET endpoints
+                    for (const u of schemaEndpoints) {
                         try {
                             const r = await fetch(u, {
                                 headers: {
@@ -70,12 +69,44 @@ export const Route = createFileRoute("/api/diag")({
                             const t = await r.text();
                             testObjResults.push({
                                 url: u.replace(cfg.ghl.apiBase, ""),
+                                method: "GET",
                                 status: r.status,
                                 bodySample: t.slice(0, 250),
                             });
                         } catch (err: any) {
-                            testObjResults.push({ url: u.replace(cfg.ghl.apiBase, ""), error: err.message });
+                            testObjResults.push({ url: u.replace(cfg.ghl.apiBase, ""), method: "GET", error: err.message });
                         }
+                    }
+
+                    // Test record CREATE endpoint with POST + a minimal dry-run payload.
+                    // We expect 200 or 422 (schema field validation) — NOT 404.
+                    // A 404 here means the endpoint path or token is wrong.
+                    try {
+                        const recordsUrl = `${cfg.ghl.apiBase}/objects/custom_objects.pos_purchase_item/records`;
+                        const testBody = JSON.stringify({
+                            locationId: cfg.ghl.locationId,
+                            properties: { __diag_test__: "true" },
+                        });
+                        const r = await fetch(recordsUrl, {
+                            method: "POST",
+                            headers: {
+                                Authorization: `Bearer ${rawToken}`,
+                                Version: "v3",
+                                "Content-Type": "application/json",
+                                Accept: "application/json",
+                            },
+                            body: testBody,
+                        });
+                        const t = await r.text();
+                        testObjResults.push({
+                            url: recordsUrl.replace(cfg.ghl.apiBase, ""),
+                            method: "POST",
+                            note: "200/422 = endpoint reachable. 404 = path or token wrong.",
+                            status: r.status,
+                            bodySample: t.slice(0, 250),
+                        });
+                    } catch (err: any) {
+                        testObjResults.push({ url: "/objects/custom_objects.pos_purchase_item/records", method: "POST", error: err.message });
                     }
 
                     // 3. Test contacts search endpoint

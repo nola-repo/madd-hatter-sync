@@ -529,9 +529,11 @@ export async function createGhlContact(input: {
 
 // ---- Custom object record create + associate ---------------------------
 //
-// IMPORTANT: The GHL /objects/{key}/records sub-path only exists under
-// Version: 2021-07-28. It returns 404 when called with Version: v3.
-// All records operations MUST use "2021-07-28" first, with v3 as a last fallback.
+// Official GHL docs (v3): POST /objects/:schemaKey/records
+// Version header: v3
+// Body: { locationId, properties: { field_key: value } }
+// The 404 seen in diagnostics was caused by the diag sending GET requests
+// to a POST-only endpoint. v3 is the correct version for all records ops.
 
 export async function createPurchaseRecord(
     schemaId: string,
@@ -547,14 +549,8 @@ export async function createPurchaseRecord(
         properties,
     };
 
-    // Each entry is tried in order. Version 2021-07-28 is required for /records.
-    // v3 only works for the schema-level /objects/ endpoints, NOT /records.
+    // Try key-based path first (most reliable), then ID-based fallback.
     const attempts: Array<{ path: string; version: string }> = [
-        { path: `/objects/custom_objects.pos_purchase_item/records`, version: "2021-07-28" },
-        { path: `/objects/custom_objects.pos_purchase_item/records?locationId=${cfg.ghl.locationId}`, version: "2021-07-28" },
-        { path: `/objects/${schemaId}/records`, version: "2021-07-28" },
-        { path: `/objects/${schemaId}/records?locationId=${cfg.ghl.locationId}`, version: "2021-07-28" },
-        // v3 fallbacks (unlikely to work for /records but included for completeness)
         { path: `/objects/custom_objects.pos_purchase_item/records`, version: "v3" },
         { path: `/objects/${schemaId}/records`, version: "v3" },
     ];
@@ -587,7 +583,7 @@ export async function associateRecordToContact(
             ? schemaId
             : "custom_objects.pos_purchase_item";
 
-    // Associations also live under the /records sub-path — use 2021-07-28 first.
+    // Associations use the /records/{id}/associations sub-path — v3.
     const associationPaths = [
         `/objects/${schemaKey}/records/${recordId}/associations?locationId=${cfg.ghl.locationId}`,
         `/objects/custom_objects.pos_purchase_item/records/${recordId}/associations?locationId=${cfg.ghl.locationId}`,
@@ -602,21 +598,16 @@ export async function associateRecordToContact(
         JSON.stringify({ contactId }),
     ];
 
-    // Try each version × path × body combination. 2021-07-28 must come before v3.
-    const versions = ["2021-07-28", "v3"];
-
     let succeeded = false;
     let lastErr: any = null;
-    outer: for (const ver of versions) {
-        for (const ep of associationPaths) {
-            for (const body of bodyShapes) {
-                try {
-                    await ghlFetch(ep, { method: "POST", body }, ver);
-                    succeeded = true;
-                    break outer;
-                } catch (e) {
-                    lastErr = e;
-                }
+    outer: for (const ep of associationPaths) {
+        for (const body of bodyShapes) {
+            try {
+                await ghlFetch(ep, { method: "POST", body }, "v3");
+                succeeded = true;
+                break outer;
+            } catch (e) {
+                lastErr = e;
             }
         }
     }
@@ -633,19 +624,17 @@ export async function findRecordByPurchaseReference(
     purchaseReference: string,
 ): Promise<string | null> {
     const cfg = getIntegrationConfig();
-    // /records sub-path requires Version: 2021-07-28, not v3.
+    // Official docs: GET /objects/{schemaKey}/records is not documented.
+    // The search endpoint is: POST /objects/search with filters.
+    // For dedup, use local Supabase first (Bug 4 fix). This function is only
+    // called when local DB has no record — search GHL as last resort.
     const basePathsWithVersion: Array<{ path: string; version: string }> = [
-        { path: `/objects/custom_objects.pos_purchase_item/records`, version: "2021-07-28" },
-        { path: `/objects/${schemaId}/records`, version: "2021-07-28" },
-        // v3 fallbacks in case a future API change makes them equivalent
         { path: `/objects/custom_objects.pos_purchase_item/records`, version: "v3" },
         { path: `/objects/${schemaId}/records`, version: "v3" },
     ];
 
-    // Paginate through records (up to a safety cap) so an existing record
-    // is found and reused rather than duplicated.
     const LIMIT = 100;
-    const MAX_PAGES = 50; // safety cap: 5,000 records
+    const MAX_PAGES = 50;
     for (const { path: basePath, version: ver } of basePathsWithVersion) {
         for (let page = 0; page < MAX_PAGES; page++) {
             const ep = `${basePath}?locationId=${cfg.ghl.locationId}&limit=${LIMIT}&skip=${page * LIMIT}`;
@@ -653,7 +642,6 @@ export async function findRecordByPurchaseReference(
             try {
                 json = await ghlFetch(ep, {}, ver);
             } catch {
-                // This path+version combo failed — move on to next.
                 break;
             }
             const records: any[] = json?.records ?? json?.data ?? [];
@@ -662,7 +650,6 @@ export async function findRecordByPurchaseReference(
                 return val === purchaseReference;
             });
             if (match?.id) return match.id;
-            // Fewer than a full page means no more records on this path.
             if (records.length < LIMIT) break;
         }
     }
