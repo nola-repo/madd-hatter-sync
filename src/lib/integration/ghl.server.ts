@@ -528,6 +528,10 @@ export async function createGhlContact(input: {
 }
 
 // ---- Custom object record create + associate ---------------------------
+//
+// IMPORTANT: The GHL /objects/{key}/records sub-path only exists under
+// Version: 2021-07-28. It returns 404 when called with Version: v3.
+// All records operations MUST use "2021-07-28" first, with v3 as a last fallback.
 
 export async function createPurchaseRecord(
     schemaId: string,
@@ -535,37 +539,31 @@ export async function createPurchaseRecord(
     values: Record<string, string>,
 ): Promise<string> {
     const cfg = getIntegrationConfig();
+    const properties = Object.fromEntries(
+        Object.entries(values).map(([displayName, val]) => [fieldKeyMap[displayName], val]),
+    );
     const body = {
         locationId: cfg.ghl.locationId,
-        // Expected field values keyed by field id/key.
-        properties: Object.fromEntries(
-            Object.entries(values).map(([displayName, val]) => [fieldKeyMap[displayName], val]),
-        ),
+        properties,
     };
-    // Confirmed-working endpoint (GET returns 200): the schema key path
-    //   POST /objects/custom_objects.pos_purchase_item/records?locationId=...
-    // The query-param variants (/objects/records?schemaKey=... / schemaId=...)
-    // return 422/404 and are NOT used. The raw object-ID path is kept only as a
-    // last-resort fallback in case the schema key differs from the discovered id.
-    let json: any = null;
-    const recordEndpoints = [
-        `/objects/custom_objects.pos_purchase_item/records`,
-        `/objects/custom_objects.pos_purchase_item/records?locationId=${cfg.ghl.locationId}`,
-        `/objects/${schemaId}/records`,
-        `/objects/${schemaId}/records?locationId=${cfg.ghl.locationId}`,
+
+    // Each entry is tried in order. Version 2021-07-28 is required for /records.
+    // v3 only works for the schema-level /objects/ endpoints, NOT /records.
+    const attempts: Array<{ path: string; version: string }> = [
+        { path: `/objects/custom_objects.pos_purchase_item/records`, version: "2021-07-28" },
+        { path: `/objects/custom_objects.pos_purchase_item/records?locationId=${cfg.ghl.locationId}`, version: "2021-07-28" },
+        { path: `/objects/${schemaId}/records`, version: "2021-07-28" },
+        { path: `/objects/${schemaId}/records?locationId=${cfg.ghl.locationId}`, version: "2021-07-28" },
+        // v3 fallbacks (unlikely to work for /records but included for completeness)
+        { path: `/objects/custom_objects.pos_purchase_item/records`, version: "v3" },
+        { path: `/objects/${schemaId}/records`, version: "v3" },
     ];
 
+    let json: any = null;
     let lastErr: any = null;
-    for (const ep of recordEndpoints) {
+    for (const { path: ep, version: ver } of attempts) {
         try {
-            json = await ghlFetch(
-                ep,
-                {
-                    method: "POST",
-                    body: JSON.stringify(body),
-                },
-                "v3",
-            );
+            json = await ghlFetch(ep, { method: "POST", body: JSON.stringify(body) }, ver);
             if (json?.record?.id || json?.id) break;
         } catch (e) {
             lastErr = e;
@@ -584,22 +582,19 @@ export async function associateRecordToContact(
     contactId: string,
 ): Promise<void> {
     const cfg = getIntegrationConfig();
-    // CRM associations API (v3) requires the related record id + the association
-    // key/label that links the custom object to contacts. We try several body
-    // shapes since the exact contract varies by object configuration.
     const schemaKey =
         schemaId.startsWith("custom_objects.") || schemaId.includes(".")
             ? schemaId
             : "custom_objects.pos_purchase_item";
 
-    const associationEndpoints = [
+    // Associations also live under the /records sub-path — use 2021-07-28 first.
+    const associationPaths = [
         `/objects/${schemaKey}/records/${recordId}/associations?locationId=${cfg.ghl.locationId}`,
-        `/objects/${schemaId}/records/${recordId}/associations?locationId=${cfg.ghl.locationId}`,
         `/objects/custom_objects.pos_purchase_item/records/${recordId}/associations?locationId=${cfg.ghl.locationId}`,
+        `/objects/${schemaId}/records/${recordId}/associations?locationId=${cfg.ghl.locationId}`,
     ];
 
-    // Try the documented body shapes. CRM's associations endpoint accepts
-    // { otherRecordId, associationKey } or { otherRecordId } in some configs.
+    // GHL accepts several body shapes depending on how the object association was configured.
     const bodyShapes = [
         JSON.stringify({ otherRecordId: contactId, associationKey: "Contact" }),
         JSON.stringify({ otherRecordId: contactId }),
@@ -607,24 +602,21 @@ export async function associateRecordToContact(
         JSON.stringify({ contactId }),
     ];
 
+    // Try each version × path × body combination. 2021-07-28 must come before v3.
+    const versions = ["2021-07-28", "v3"];
+
     let succeeded = false;
     let lastErr: any = null;
-    outer: for (const ep of associationEndpoints) {
-        for (const body of bodyShapes) {
-            try {
-                await ghlFetch(
-                    ep,
-                    {
-                        method: "POST",
-                        body,
-                    },
-                    "v3",
-                );
-                succeeded = true;
-                break outer;
-            } catch (e) {
-                lastErr = e;
-                // Try the next body shape / endpoint
+    outer: for (const ver of versions) {
+        for (const ep of associationPaths) {
+            for (const body of bodyShapes) {
+                try {
+                    await ghlFetch(ep, { method: "POST", body }, ver);
+                    succeeded = true;
+                    break outer;
+                } catch (e) {
+                    lastErr = e;
+                }
             }
         }
     }
@@ -641,24 +633,27 @@ export async function findRecordByPurchaseReference(
     purchaseReference: string,
 ): Promise<string | null> {
     const cfg = getIntegrationConfig();
-    const basePaths = [
-        `/objects/custom_objects.pos_purchase_item/records`,
-        `/objects/${schemaId}/records`,
+    // /records sub-path requires Version: 2021-07-28, not v3.
+    const basePathsWithVersion: Array<{ path: string; version: string }> = [
+        { path: `/objects/custom_objects.pos_purchase_item/records`, version: "2021-07-28" },
+        { path: `/objects/${schemaId}/records`, version: "2021-07-28" },
+        // v3 fallbacks in case a future API change makes them equivalent
+        { path: `/objects/custom_objects.pos_purchase_item/records`, version: "v3" },
+        { path: `/objects/${schemaId}/records`, version: "v3" },
     ];
 
-    // Paginate through ALL records (up to a safety cap) so an existing record
-    // beyond the first page is found and reused instead of being duplicated.
-    // CRM's records endpoint supports `skip`/`limit` style pagination.
+    // Paginate through records (up to a safety cap) so an existing record
+    // is found and reused rather than duplicated.
     const LIMIT = 100;
     const MAX_PAGES = 50; // safety cap: 5,000 records
-    for (const basePath of basePaths) {
+    for (const { path: basePath, version: ver } of basePathsWithVersion) {
         for (let page = 0; page < MAX_PAGES; page++) {
             const ep = `${basePath}?locationId=${cfg.ghl.locationId}&limit=${LIMIT}&skip=${page * LIMIT}`;
             let json: any;
             try {
-                json = await ghlFetch(ep, {}, "v3");
+                json = await ghlFetch(ep, {}, ver);
             } catch {
-                // This base path failed — try the next base path from page 0.
+                // This path+version combo failed — move on to next.
                 break;
             }
             const records: any[] = json?.records ?? json?.data ?? [];
@@ -667,7 +662,7 @@ export async function findRecordByPurchaseReference(
                 return val === purchaseReference;
             });
             if (match?.id) return match.id;
-            // Less than a full page means no more records.
+            // Fewer than a full page means no more records on this path.
             if (records.length < LIMIT) break;
         }
     }
