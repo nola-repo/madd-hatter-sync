@@ -438,7 +438,8 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
     });
 
     // 10. Auto-sync eligible paid orders to the CRM (purchase records + tags).
-    // Processes orders that are PAID and not yet processed (or previously errored).
+    // Processes orders that are PAID and not yet synced (pending or error status,
+    // or not yet matched through the GHL pipeline).
     // Failure-isolated: one bad order never stops the rest.
     await safe("crm-sync", async () => {
         const sb = getSupabaseServer();
@@ -446,9 +447,7 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
             .from("orders")
             .select("clover_order_id")
             .eq("payment_status", "PAID")
-            .or(
-                "sync_status.is.null,sync_status.eq.pending,sync_status.eq.error,status.in.(pending,error)",
-            )
+            .in("status", ["pending", "error"])
             .order("created_time", { ascending: false })
             .limit(250);
         if (eErr) throw new Error(`fetch eligible for sync: ${eErr.message}`);

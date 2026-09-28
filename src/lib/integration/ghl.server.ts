@@ -406,10 +406,13 @@ export function validatePurchaseSchema(schema: CustomObjectSchema | null): Schem
         if (key) {
             fieldKeyMap[name] = key;
         } else {
+            // Field not found in schema — record it as missing and use a
+            // best-guess key so partial syncs still write what they can.
+            missingFields.push(name);
             fieldKeyMap[name] = normalize(name);
         }
     }
-    return { ok: true, schema, missingFields, fieldKeyMap };
+    return { ok: missingFields.length === 0, schema, missingFields, fieldKeyMap };
 }
 
 // ---- Contact lookup ----------------------------------------------------

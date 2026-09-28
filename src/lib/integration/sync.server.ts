@@ -272,19 +272,25 @@ async function runSync(order: CloverOrder, orderRowId: string): Promise<SyncResu
 
         // Reconcile: if a record already exists (from a prior timed-out attempt),
         // reuse it instead of creating a duplicate.
+        //
+        // Check order: local Supabase DB first (fast, 1 query) — if found, skip
+        // the expensive GHL full-scan entirely. Only fall back to the GHL search
+        // when the local DB has no record (e.g. first-ever sync or DB was wiped).
         let recordId: string | null = null;
-        try {
-            recordId = await findRecordByPurchaseReference(schema.id, purchaseRefKey, ref);
-        } catch {
-            // Search may not be supported; fall through to create and rely on upsert.
-            recordId = null;
-        }
 
-        // Also check our own DB for a previously-saved record id.
+        // Step A: check our own DB for a previously-saved record id.
+        const existingItems = await getOrderItems(orderRowId);
+        const existingLocal = existingItems.find((i) => i.purchase_reference === ref && i.ghl_record_id);
+        if (existingLocal) recordId = existingLocal.ghl_record_id;
+
+        // Step B: if not found locally, scan GHL to recover from a timed-out attempt.
         if (!recordId) {
-            const existingItems = await getOrderItems(orderRowId);
-            const existing = existingItems.find((i) => i.purchase_reference === ref && i.ghl_record_id);
-            if (existing) recordId = existing.ghl_record_id;
+            try {
+                recordId = await findRecordByPurchaseReference(schema.id, purchaseRefKey, ref);
+            } catch {
+                // Search may not be supported; fall through to create.
+                recordId = null;
+            }
         }
 
         if (!recordId) {

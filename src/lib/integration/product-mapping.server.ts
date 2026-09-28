@@ -170,13 +170,13 @@ export async function getProductMappings(): Promise<ProductMappingRow[]> {
     const sb = getSupabaseServer();
     const cfg = getIntegrationConfig();
 
-    // Load inventory items from Supabase items table + custom product_mappings
+    // Load inventory items from the `products` table (populated during ingestion)
     const { data: items, error: iErr } = await sb
-        .from("items")
+        .from("products")
         .select("*")
         .eq("clover_merchant_id", cfg.clover.merchantId);
 
-    if (iErr) throw new Error(`Failed to load inventory items: ${iErr.message}`);
+    if (iErr) throw new Error(`Failed to load products: ${iErr.message}`);
 
     const { data: mappings } = await sb
         .from("product_mappings")
@@ -200,16 +200,16 @@ export async function getProductMappings(): Promise<ProductMappingRow[]> {
 
     for (const item of items ?? []) {
         const existing = mappingMap.get(item.clover_item_id);
-        const normName = normalizeItemName(item.name);
+        const normName = normalizeItemName(item.name ?? "");
         const tag = purchaseTagLabel(normName);
 
         results.push({
             id: existing?.id ?? item.id,
             cloverMerchantId: cfg.clover.merchantId,
             cloverItemId: item.clover_item_id,
-            itemName: item.name,
+            itemName: item.name ?? "",
             normalizedItemName: normName,
-            categoryId: item.category_id ?? null,
+            categoryId: item.clover_category_id ?? null,
             categoryName: item.category_name ?? null,
             priceCents: item.price_cents ?? 0,
             canonicalProductName: existing?.canonical_product_name ?? normName,
@@ -249,9 +249,10 @@ export async function searchCustomerPurchasesByItem(
     }
 
     // 1. Search order_items matching item_name or clover_item_id
+    // Use a direct query (not inner join) to avoid referencing non-existent FK relationships
     const { data: orderItems, error: oiErr } = await sb
         .from("order_items")
-        .select("*, orders!inner(clover_customer_id, created_time, clover_merchant_id, status)")
+        .select("*")
         .eq("clover_merchant_id", cfg.clover.merchantId)
         .or(`item_name.ilike.%${query}%,clover_item_id.eq.${query}`);
 
@@ -278,68 +279,66 @@ export async function searchCustomerPurchasesByItem(
         };
     }
 
-    // Collect distinct customer IDs and order IDs
-    const customerIds = Array.from(
-        new Set(
-            orderItems.map((oi) => (oi.orders as any)?.clover_customer_id).filter(Boolean) as string[],
-        ),
+    // Collect distinct order UUIDs to join against orders table
+    const orderIds = Array.from(new Set(orderItems.map((oi) => oi.order_id).filter(Boolean)));
+
+    // Fetch linked orders to get customer IDs and timestamps
+    const { data: relatedOrders } = orderIds.length > 0
+        ? await sb
+              .from("orders")
+              .select("id, clover_order_id, clover_customer_id, created_time")
+              .in("id", orderIds)
+        : { data: [] };
+    const orderMap = new Map((relatedOrders ?? []).map((o) => [o.id, o]));
+
+    // Collect distinct customer IDs from the orders
+    const relatedCustomerIds = Array.from(
+        new Set((relatedOrders ?? []).map((o) => o.clover_customer_id).filter(Boolean) as string[]),
     );
 
-    // Load customer profiles from database
-    const { data: customers } = await sb
-        .from("customers")
-        .select("*")
-        .in("clover_customer_id", customerIds.length > 0 ? customerIds : ["__none__"]);
+    // Load customer profiles
+    const { data: relCustomers } = relatedCustomerIds.length > 0
+        ? await sb.from("customers").select("*").in("clover_customer_id", relatedCustomerIds)
+        : { data: [] };
+    const relCustMap = new Map((relCustomers ?? []).map((c) => [c.clover_customer_id, c]));
 
-    const custMap = new Map((customers ?? []).map((c) => [c.clover_customer_id, c]));
+    // Load customer → GHL contact mappings
+    const { data: relMappings } = relatedCustomerIds.length > 0
+        ? await sb.from("customer_mappings").select("*").in("clover_customer_id", relatedCustomerIds)
+        : { data: [] };
+    const relMappingMap = new Map((relMappings ?? []).map((m) => [m.clover_customer_id, m]));
 
-    // Load customer mappings to get matched GHL contact IDs
-    const { data: mappings } = await sb
-        .from("customer_mappings")
-        .select("*")
-        .in("clover_customer_id", customerIds.length > 0 ? customerIds : ["__none__"]);
-
-    const mappingMap = new Map((mappings ?? []).map((m) => [m.clover_customer_id, m]));
-
-    // Load purchase_tags table for verification status
-    const { data: tags } = await sb
-        .from("purchase_tags")
-        .select("*")
-        .in("clover_customer_id", customerIds.length > 0 ? customerIds : ["__none__"]);
-
-    const tagMap = new Map((tags ?? []).map((t) => [`${t.clover_customer_id}:${t.item_name}`, t]));
+    // Load purchase_tags for tag verification status
+    const { data: relTags } = relatedCustomerIds.length > 0
+        ? await sb.from("purchase_tags").select("*").in("clover_customer_id", relatedCustomerIds)
+        : { data: [] };
+    const relTagMap = new Map((relTags ?? []).map((t) => [t.clover_customer_id, t]));
 
     let totalQty = 0;
     let totalSales = 0;
-    let matchedContacts = new Set<string>();
+    const matchedContacts = new Set<string>();
     let verifiedTagsCount = 0;
     let customObjectsSynced = 0;
 
     const buyersList: CustomerPurchaseSearchResult["buyers"] = [];
 
     for (const oi of orderItems) {
-        const order = oi.orders as any;
-        const cid = order?.clover_customer_id ?? null;
-        const cust = cid ? custMap.get(cid) : null;
-        const map = cid ? mappingMap.get(cid) : null;
-        const itemTag = cid ? tagMap.get(`${cid}:${oi.item_name}`) : null;
+        const ord = oi.order_id ? orderMap.get(oi.order_id) : null;
+        const cid = ord?.clover_customer_id ?? null;
+        const cust = cid ? relCustMap.get(cid) : null;
+        const mapping = cid ? (relMappingMap.get(cid) as any) : null;
+        const tag = cid ? (relTagMap.get(cid) as any) : null;
 
         const qty = oi.quantity || 1;
-        const price = oi.price_cents || 0;
+        const price = oi.unit_price_cents || 0;
         const lineTotal = oi.line_total_cents || qty * price;
 
         totalQty += qty;
         totalSales += lineTotal;
 
-        if (map?.ghl_contact_id) {
-            matchedContacts.add(map.ghl_contact_id);
-        }
-        if (itemTag?.verification_status === "verified") {
-            verifiedTagsCount++;
-        }
-        if (oi.ghl_record_id) {
-            customObjectsSynced++;
-        }
+        if (mapping?.ghl_contact_id) matchedContacts.add(mapping.ghl_contact_id);
+        if (tag?.verification_status === "verified") verifiedTagsCount++;
+        if (oi.ghl_record_id) customObjectsSynced++;
 
         const cName = cust
             ? [cust.first_name, cust.last_name].filter(Boolean).join(" ") || "Clover Customer"
@@ -352,16 +351,16 @@ export async function searchCustomerPurchasesByItem(
             customerName: cName,
             phone: cust?.phone ?? null,
             email: cust?.email ?? null,
-            cloverOrderId: oi.clover_order_id,
-            purchaseDate: order?.created_time ?? oi.created_at,
+            cloverOrderId: oi.clover_order_id ?? ord?.clover_order_id ?? "",
+            purchaseDate: String(ord?.created_time ?? oi.created_time ?? oi.created_at ?? ""),
             quantity: qty,
             unitPriceCents: price,
             lineTotalCents: lineTotal,
-            ghlContactId: map?.ghl_contact_id ?? null,
-            matchMethod: map?.match_method ?? null,
-            matchStatus: map ? "MATCHED" : cid ? "UNMATCHED" : "NO_CUSTOMER",
+            ghlContactId: mapping?.ghl_contact_id ?? null,
+            matchMethod: mapping?.match_method ?? mapping?.matched_by ?? null,
+            matchStatus: mapping ? "MATCHED" : cid ? "UNMATCHED" : "NO_CUSTOMER",
             purchaseTag: tagLabel,
-            tagStatus: itemTag?.verification_status ?? "pending",
+            tagStatus: tag?.verification_status ?? "pending",
             customObjectRecordId: oi.ghl_record_id ?? null,
             customObjectStatus: oi.ghl_record_id ? "created" : "pending",
         });
@@ -372,7 +371,7 @@ export async function searchCustomerPurchasesByItem(
         itemName: orderItems[0]?.item_name ?? query,
         canonicalProduct: normName,
         purchaseTag: tagLabel,
-        totalBuyers: customerIds.length,
+        totalBuyers: relatedCustomerIds.length,
         totalQuantity: totalQty,
         totalSalesCents: totalSales,
         matchedGhlContactsCount: matchedContacts.size,

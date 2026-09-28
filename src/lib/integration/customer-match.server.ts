@@ -278,7 +278,7 @@ export async function matchCloverCustomerToGhlContact(input: {
     // RULE G — has identifiers but no match found.
     // We do NOT create a contact. The customer remains unmatched.
     return {
-        status: "NO_GHL_MATCH",
+        status: "NO_MATCH",
         ghlContactId: null,
         matchMethod: "none",
         evidence,

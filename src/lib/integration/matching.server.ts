@@ -213,11 +213,12 @@ export async function matchCustomer(order: CloverOrder): Promise<CustomerMatchPr
         };
     }
 
-    // 3. No match, but we have usable identifying info -> create.
+    // 3. No match and we have usable identifying info, but we NEVER create contacts.
+    // Return held_for_review so the preview accurately reflects what sync will do.
     if (email || phone) {
         return {
-            decision: "will_create",
-            reason: "No existing GHL contact found — a new contact will be created.",
+            decision: "held_for_review",
+            reason: "No existing GHL contact found for this customer. Order will be held for review — no contact will be created automatically.",
             ghlContactId: null,
             candidates: [],
         };
