@@ -339,13 +339,17 @@ export async function findPurchaseObjectSchema(): Promise<{
                 };
                 break;
             }
-        } catch (e: any) {
-            debug.probed.push({
+        } catch (e: unknown) {
+            const err = e as { status?: number; message?: string; body?: string };
+            const entry: SchemaDiscoveryDebug["probed"][number] = {
                 endpoint: ep,
-                status: e?.status ?? null,
-                error: e?.message ?? String(e),
-                bodySample: e?.body ? String(e.body).slice(0, 300) : undefined,
-            });
+                status: err.status ?? null,
+                error: err.message ?? String(e),
+            };
+            if (err.body) {
+                entry.bodySample = String(err.body).slice(0, 300);
+            }
+            debug.probed.push(entry);
         }
     }
 
