@@ -7,6 +7,7 @@
 import { fetchCloverOrder } from "./clover.server";
 import {
     associateRecordToContact,
+    createGhlContact,
     createPurchaseRecord,
     findPurchaseObjectSchema,
     findRecordByPurchaseReference,
@@ -253,10 +254,142 @@ async function runSync(
         review_reason: match.reason,
     });
 
-    // If NOT a confident match → preserve as unmatched, no GHL modification.
+    // If NOT a confident match — handle NO_CUSTOMER separately by auto-creating
+    // an anonymous GHL contact so POS Purchase Items still sync.
+    // All other non-confident statuses (CONFLICT, AMBIGUOUS, etc.) stay held.
     if (!match.confident || !match.ghlContactId) {
+        if (match.status === "NO_CUSTOMER") {
+            // Anonymous walk-in order: auto-create a GHL contact using the order
+            // data so POS Purchase Items can still be recorded in GHL.
+            let anonymousContactId: string | null = null;
+            try {
+                const orderDate = new Date(order.createdTime).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                });
+                const shortOrderId = order.id.slice(-6).toUpperCase();
+                const created = await createGhlContact({
+                    firstName: "Walk-In",
+                    lastName: `Customer ${shortOrderId}`,
+                    email: "",
+                    phone: "",
+                    note: `Anonymous walk-in order from Clover POS. Order ID: ${order.id}. Date: ${orderDate}. Total: ${formatMoney(order.total.cents)} ${order.currency}. Location: ${order.locationName ?? "Madd Hatter"}.`,
+                });
+                anonymousContactId = created.id;
+                await logSyncStep({
+                    correlationId: `SYNC-${order.id}`,
+                    operation: "GHL_CONTACT_LOOKUP",
+                    status: "success",
+                    cloverOrderId: order.id,
+                    cloverCustomerId: null,
+                    ghlContactId: anonymousContactId,
+                    details: { matchStatus: "AUTO_CREATED_ANONYMOUS", method: "auto_create", reason: `No customer on order. Created anonymous contact Walk-In Customer ${shortOrderId}.` },
+                });
+            } catch (createErr: any) {
+                return {
+                    outcome: "error",
+                    message: `No customer on order and anonymous contact creation failed: ${createErr?.message ?? "unknown"}.`,
+                    ghlContactId: null,
+                    matchedBy: null,
+                    purchaseRecordIds: [],
+                    itemsSynced: 0,
+                    itemsHeld: order.lineItems.length,
+                    reviewReason: "Anonymous contact creation failed.",
+                    error: createErr?.message ?? "unknown",
+                };
+            }
+
+            // Proceed with the anonymous contact — fall through to line-item sync.
+            // We re-assign the match variables so the rest of the function works.
+            const anonGhlContactId = anonymousContactId!;
+            const anonMatchedBy = "auto_create" as const;
+
+            // Eligibility gate.
+            if (!orderElig.eligible) {
+                await updateOrder(orderRowId, { ghl_contact_id: anonGhlContactId, review_reason: orderElig.flag });
+                return {
+                    outcome: "held_for_review",
+                    message: `Anonymous contact created, but order is not eligible to sync: ${orderElig.flag}`,
+                    ghlContactId: anonGhlContactId,
+                    matchedBy: anonMatchedBy,
+                    purchaseRecordIds: [],
+                    itemsSynced: 0,
+                    itemsHeld: order.lineItems.length,
+                    reviewReason: orderElig.flag,
+                    error: null,
+                };
+            }
+
+            // Sync line items to the anonymous contact.
+            const anonPurchaseRecordIds: string[] = [];
+            let anonItemsSynced = 0;
+            for (const li of order.lineItems) {
+                const ref = purchaseReference(order.merchantId, order.id, li.id);
+                let recordId: string | null = null;
+                const existingItems = await getOrderItems(orderRowId);
+                const existingLocal = existingItems.find((i) => i.purchase_reference === ref && i.ghl_record_id);
+                if (existingLocal) recordId = existingLocal.ghl_record_id;
+                if (!recordId) {
+                    try { recordId = await findRecordByPurchaseReference(schema.id, purchaseRefKey, ref); } catch { recordId = null; }
+                }
+                if (!recordId) {
+                    const values: Record<string, string> = {
+                        "Purchase Reference": ref,
+                        "Item Name": li.name,
+                        Category: li.category ?? "",
+                        Quantity: String(li.quantity),
+                        "Unit Price": formatMoney(li.price.cents),
+                        "Line Total": formatMoney(li.discountAmount.cents ? li.price.cents * li.quantity - li.discountAmount.cents : li.price.cents * li.quantity),
+                        Currency: order.currency,
+                        "Purchase Date": new Date(order.createdTime).toISOString(),
+                        "Clover Order ID": order.id,
+                        "Clover Line Item ID": li.id,
+                        "Clover Item ID": li.cloverItemId ?? "",
+                        "Clover Merchant ID": order.merchantId,
+                        "Clover Customer ID": "",
+                        "Location Name": order.locationName ?? "",
+                        "Payment Status": order.paymentStatus,
+                    };
+                    recordId = await createPurchaseRecord(schema.id, schemaVal.fieldKeyMap, values);
+                }
+                await associateRecordToContact(schema.id, recordId, anonGhlContactId);
+                await upsertOrderItem({
+                    order_id: orderRowId,
+                    clover_line_item_id: li.id,
+                    clover_item_id: li.cloverItemId,
+                    purchase_reference: ref,
+                    ghl_record_id: recordId,
+                    item_name: li.name,
+                    category: li.category,
+                    quantity: li.quantity,
+                    unit_price_cents: li.price.cents,
+                    line_total_cents: li.discountAmount.cents ? Math.max(0, li.price.cents * li.quantity - li.discountAmount.cents) : li.price.cents * li.quantity,
+                    currency: order.currency,
+                    payment_status: order.paymentStatus,
+                    status: "synced",
+                    flag: "anonymous_walk_in",
+                });
+                anonPurchaseRecordIds.push(recordId);
+                anonItemsSynced += 1;
+            }
+            await updateOrder(orderRowId, { ghl_contact_id: anonGhlContactId, processed_at: new Date().toISOString() });
+            return {
+                outcome: "synced",
+                message: `Synced ${anonItemsSynced} purchase record(s) to anonymous GHL contact ${anonGhlContactId}.`,
+                ghlContactId: anonGhlContactId,
+                matchedBy: anonMatchedBy,
+                purchaseRecordIds: anonPurchaseRecordIds,
+                itemsSynced: anonItemsSynced,
+                itemsHeld: 0,
+                reviewReason: null,
+                error: null,
+            };
+        }
+
+        // Non-anonymous non-confident matches (CONFLICT, AMBIGUOUS, etc.) → hold.
         return {
-            outcome: match.status === "NO_CUSTOMER" ? "held_for_review" : "held_for_review",
+            outcome: "held_for_review",
             message: `Customer not confidently matched (${match.status}). No GHL contact or records created. ${match.reason}`,
             ghlContactId: null,
             matchedBy: null,
