@@ -405,18 +405,22 @@ export function validatePurchaseSchema(schema: CustomObjectSchema | null): Schem
 
     const fieldKeyMap: Record<string, string> = {};
     const missingFields: string[] = [];
+    const discoveredKeys = new Set(schema.fields.map((f) => f.key));
+
     for (const name of EXPECTED_PURCHASE_FIELDS) {
         const key = byNormalized.get(normalize(name));
         if (key) {
             fieldKeyMap[name] = key;
         } else {
-            // Field not found in schema — record it as missing and use a
-            // best-guess key so partial syncs still write what they can.
+            // Field not found in live schema — record as missing but DON'T
+            // store a guessed key. Guessed keys cause GHL 422 errors.
             missingFields.push(name);
-            fieldKeyMap[name] = normalize(name);
         }
     }
-    return { ok: missingFields.length === 0, schema, missingFields, fieldKeyMap };
+
+    // ok = true whenever a schema exists. Missing fields are informational only
+    // and must NOT block the sync — the AI Studio fix matches this behaviour.
+    return { ok: true, schema, missingFields, fieldKeyMap };
 }
 
 // ---- Contact lookup ----------------------------------------------------
@@ -564,9 +568,19 @@ export async function createPurchaseRecord(
     values: Record<string, string>,
 ): Promise<string> {
     const cfg = getIntegrationConfig();
-    const properties = Object.fromEntries(
-        Object.entries(values).map(([displayName, val]) => [fieldKeyMap[displayName], val]),
-    );
+
+    // Only include entries where the key was actually discovered in the live
+    // GHL schema. Guessed/synthetic keys (where the display name itself was
+    // used as the key) are skipped — they cause GHL 422 errors.
+    const properties: Record<string, string> = {};
+    for (const [displayName, val] of Object.entries(values)) {
+        const key = fieldKeyMap[displayName];
+        // If the key is missing from the map, skip it entirely (not guessed)
+        if (key !== undefined && key !== null) {
+            properties[key] = val;
+        }
+    }
+
     const body = {
         locationId: cfg.ghl.locationId,
         properties,

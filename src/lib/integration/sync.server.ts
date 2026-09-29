@@ -188,18 +188,33 @@ async function runSync(
         schemaVal = validatePurchaseSchema(schema);
     }
 
-    if (!schemaVal.ok || !schema) {
+    // Only block if the schema object itself doesn't exist, OR if the
+    // Purchase Reference field is absent (it's the dedup key — without it
+    // we can't prevent duplicate records). Any other missing fields are
+    // tolerated: the record is created with whatever fields exist.
+    const purchaseRefKey = schemaVal.fieldKeyMap["Purchase Reference"];
+    if (!schema || !purchaseRefKey) {
         return {
             outcome: "error",
-            message: "GHL 'POS Purchase Item' custom object schema is missing or incomplete.",
+            message: !schema
+                ? "GHL 'POS Purchase Item' custom object not found. Create it in GHL Settings → Custom Objects."
+                : "GHL custom object is missing the required 'Purchase Reference' field (used for deduplication).",
             ghlContactId: null,
             matchedBy: null,
             purchaseRecordIds: [],
             itemsSynced: 0,
             itemsHeld: 0,
             reviewReason: null,
-            error: `Missing GHL custom object fields: ${schemaVal.missingFields.join(", ")}. Create them in GHL under the custom object named "POS Purchase Item".`,
+            error: !schema
+                ? "Custom object schema not found in GHL."
+                : "Missing 'Purchase Reference' field in GHL custom object.",
         };
+    }
+    if (schemaVal.missingFields.length > 0) {
+        console.warn(
+            `[sync] GHL schema partial: missing fields [${schemaVal.missingFields.join(", ")}]. ` +
+            `Sync will proceed with available fields.`,
+        );
     }
 
     // ---- CENTRALIZED IDENTITY RESOLUTION ----
@@ -287,7 +302,7 @@ async function runSync(
     const purchaseRecordIds: string[] = [];
     let itemsSynced = 0;
     let itemsHeld = 0;
-    const purchaseRefKey = schemaVal.fieldKeyMap["Purchase Reference"];
+    // purchaseRefKey is declared above in the schema validation block.
 
     for (const li of order.lineItems) {
         const ref = purchaseReference(order.merchantId, order.id, li.id);
