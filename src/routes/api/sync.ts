@@ -6,25 +6,22 @@ import { getIntegrationConfig } from "@/lib/integration/config.server";
 import { getSupabaseServer } from "@/lib/integration/supabase.server";
 
 // -------------------------------------------------------------------------
-// /api/sync — Automatic sync entry point
+// /api/sync — Sync entry point for cron-job.org and Clover webhooks
 //
-// IMPORTANT: This app runs on GHL AI Studio (Cloudflare Workers / Nitro).
-// That is a SERVERLESS / EDGE runtime. There are no background threads.
-// Any fire-and-forget `.catch()` pattern is KILLED the instant the response
-// is sent. ALL async work MUST be awaited before returning a Response.
+// IMPORTANT: GHL AI Studio runs on Cloudflare Workers (Nitro/serverless).
+// There are NO background threads. All work must complete before the response.
+// cron-job.org max timeout = 30 seconds, so we split the pipeline into steps:
 //
-// This endpoint serves two purposes:
+//   GET /api/sync?secret=...&step=fetch  → Pull Clover data into Supabase (~5-10s)
+//   GET /api/sync?secret=...&step=push   → Push pending orders to GHL (~10-20s)
+//   GET /api/sync?secret=...             → Run both steps (may timeout on large datasets)
 //
-// 1. CLOVER WEBHOOKS (POST)
-//    Configure this URL in Clover Dashboard → App Settings → Webhooks.
-//    Clover will POST when orders are created/updated or payments clear.
-//    We synchronously sync the specific order to GHL (tags + custom object).
+// RECOMMENDED CRON SETUP (cron-job.org):
+//   Job A: GET /api/sync?secret=...&step=fetch  every 15 min
+//   Job B: GET /api/sync?secret=...&step=push   every 15 min  (offset by 2 minutes)
 //
-// 2. CRON PING (GET)
-//    Hit GET /api/sync?secret=SYNC_SECRET to trigger a full background refresh.
-//    Configure cron-job.org to call this URL every 15–30 minutes.
-//    The cron timeout must be >= 60 seconds (set to 120s in cron-job.org settings).
-//    Returns the full sync result once complete.
+// CLOVER WEBHOOK (POST):
+//   Configure webhook URL in Clover Dashboard → App Settings → Webhooks.
 // -------------------------------------------------------------------------
 
 export const Route = createFileRoute("/api/sync")({
@@ -34,24 +31,40 @@ export const Route = createFileRoute("/api/sync")({
             GET: async ({ request }) => {
                 const url = new URL(request.url);
                 const secret = url.searchParams.get("secret");
+                const step = url.searchParams.get("step"); // "fetch" | "push" | null (both)
                 const cfg = getIntegrationConfig();
 
-                // Validate the secret (set SYNC_SECRET in your env vars)
+                // Validate the secret
                 const expectedSecret = process.env.SYNC_SECRET ?? cfg.clover.webhookSecret ?? "";
                 if (expectedSecret && secret !== expectedSecret) {
                     return Response.json({ error: "Unauthorized" }, { status: 401 });
                 }
 
-                // MUST await — GHL AI Studio (Cloudflare Workers) kills background tasks.
                 try {
-                    const result = await runFullSync();
+                    if (step === "fetch") {
+                        // Step A only: pull Clover → Supabase (fast, ~5-10s)
+                        const result = await stepFetch();
+                        return Response.json({ ok: true, step: "fetch", ...result });
+                    }
+
+                    if (step === "push") {
+                        // Step B only: Supabase → GHL contacts + Purchase Items (fast with small limit)
+                        const result = await stepPush(25);
+                        return Response.json({ ok: true, step: "push", ...result });
+                    }
+
+                    // No step specified: run both (may be slow, only use for manual testing)
+                    const fetchResult = await stepFetch();
+                    const pushResult = await stepPush(25);
                     return Response.json({
                         ok: true,
-                        message: "Full sync completed.",
+                        step: "both",
                         timestamp: new Date().toISOString(),
-                        ...result,
+                        ...fetchResult,
+                        ...pushResult,
                     });
                 } catch (e: any) {
+                    await logFailure(e);
                     return Response.json({
                         ok: false,
                         error: e?.message ?? "Sync failed",
@@ -65,15 +78,10 @@ export const Route = createFileRoute("/api/sync")({
                 try {
                     const cfg = getIntegrationConfig();
 
-                    // Verify Clover webhook signature if secret is configured
                     const cloverSecret = process.env.CLOVER_WEBHOOK_SECRET ?? cfg.clover.webhookSecret ?? "";
                     if (cloverSecret) {
                         const sig = request.headers.get("x-clover-hmac-sha256") ?? "";
-                        if (!sig) {
-                            // Clover doesn't always send a signature on first delivery;
-                            // log but don't reject — the payload itself is the auth.
-                            console.warn("[clover-webhook] No HMAC signature in request.");
-                        }
+                        if (!sig) console.warn("[clover-webhook] No HMAC signature in request.");
                     }
 
                     let body: any;
@@ -83,9 +91,6 @@ export const Route = createFileRoute("/api/sync")({
                         return Response.json({ error: "Invalid JSON body" }, { status: 400 });
                     }
 
-                    // Clover webhook payload shape:
-                    // { type: "PAYMENT" | "ORDER", merchantId: "...", appId: "...",
-                    //   objectId: "...", time: 1234567890 }
                     const eventType: string = (body?.type ?? body?.event ?? "").toUpperCase();
                     const objectId: string = body?.objectId ?? body?.orderId ?? body?.id ?? "";
                     const merchantId: string = body?.merchantId ?? cfg.clover.merchantId;
@@ -96,19 +101,16 @@ export const Route = createFileRoute("/api/sync")({
                         return Response.json({ ok: true, skipped: "no objectId in payload" });
                     }
 
-                    // For payment events, Clover gives us the payment ID.
-                    // Run a full refresh to pick up newly paid orders.
+                    // For payment events: run a quick Clover fetch to pick up new paid orders
                     if (eventType === "PAYMENT" || eventType.includes("PAYMENT")) {
-                        await runFullSync();
-                        return Response.json({ ok: true, action: "full_sync_completed", event: eventType });
+                        await stepFetch();
+                        // Push a small batch immediately
+                        await stepPush(10);
+                        return Response.json({ ok: true, action: "fetch_and_push", event: eventType });
                     }
 
-                    if (
-                        eventType === "ORDER" ||
-                        eventType.includes("ORDER") ||
-                        objectId.length > 0
-                    ) {
-                        // Sync this specific order immediately (fast path)
+                    // For order events: sync this specific order immediately
+                    if (eventType === "ORDER" || eventType.includes("ORDER") || objectId.length > 0) {
                         const result = await syncOrderToGhl(objectId).catch((e) => ({
                             outcome: "error" as const,
                             error: e?.message ?? String(e),
@@ -121,8 +123,8 @@ export const Route = createFileRoute("/api/sync")({
                             reviewReason: null,
                         }));
 
-                        // Also run pending purchase ops (tags) — must await on serverless!
-                        await processPendingPurchases(50).catch((e) =>
+                        // Run a small tag pass immediately
+                        await processPendingPurchases(10).catch((e) =>
                             console.error("[clover-webhook] purchase ops failed:", e),
                         );
 
@@ -136,9 +138,10 @@ export const Route = createFileRoute("/api/sync")({
                         });
                     }
 
-                    // Unknown event type — run full sync as fallback
-                    await runFullSync();
-                    return Response.json({ ok: true, action: "fallback_full_sync", event: eventType });
+                    // Unknown event: run small fetch+push
+                    await stepFetch();
+                    await stepPush(10);
+                    return Response.json({ ok: true, action: "fallback_sync", event: eventType });
                 } catch (e: any) {
                     console.error("[clover-webhook] handler error:", e);
                     return Response.json({ error: e?.message ?? "Internal error" }, { status: 500 });
@@ -148,61 +151,52 @@ export const Route = createFileRoute("/api/sync")({
     },
 });
 
-// ---- Full pipeline sync ------------------------------------------------
+// ---- Step A: Pull Clover data into Supabase (fast) ----------------------
 
-async function runFullSync(): Promise<{
-    customersUpserted: number;
-    ordersUpserted: number;
-    processed: number;
-    matched: number;
-    tagsApplied: number;
-}> {
-    console.log("[auto-sync] Starting full refresh pipeline...");
-    let refreshResult: any = {};
-    let opsResult: any = {};
+async function stepFetch() {
+    console.log("[sync] stepFetch: pulling Clover data...");
+    const result = await refreshPosData();
+    console.log(`[sync] stepFetch done: ${result.customersUpserted} customers, ${result.ordersUpserted} orders`);
+    return {
+        customersUpserted: result.customersUpserted ?? 0,
+        ordersUpserted: result.ordersUpserted ?? 0,
+        itemsUpserted: result.orderItemsUpserted ?? 0,
+    };
+}
+
+// ---- Step B: Push pending orders to GHL (small batch, fast) -------------
+
+async function stepPush(limit = 25) {
+    console.log(`[sync] stepPush: processing up to ${limit} customers...`);
+    const ops = await processPendingPurchases(limit);
+    console.log(
+        `[sync] stepPush done: ${ops.processed} processed, ${ops.matched} matched, ` +
+        `${ops.tagsApplied} tags applied.`,
+    );
+    return {
+        processed: ops.processed ?? 0,
+        matched: ops.matched ?? 0,
+        tagsApplied: ops.tagsApplied ?? 0,
+        tagsVerified: ops.tagsVerified ?? 0,
+        errors: ops.errors ?? 0,
+    };
+}
+
+// ---- Failure logging to Supabase ----------------------------------------
+
+async function logFailure(e: any) {
     try {
-        // Step 1: Pull all data from Clover into Supabase
-        refreshResult = await refreshPosData();
-        console.log(
-            `[auto-sync] Clover refresh done: ${refreshResult.customersUpserted} customers, ` +
-            `${refreshResult.ordersUpserted} orders, ${refreshResult.orderItemsUpserted} items.`,
-        );
-
-        // Step 2: Match customers, auto-create GHL contacts, apply tags + POS Purchase Items
-        opsResult = await processPendingPurchases(200);
-        console.log(
-            `[auto-sync] Purchase ops done: ${opsResult.processed} customers, ` +
-            `${opsResult.matched} matched, ${opsResult.tagsApplied} tags applied, ` +
-            `${opsResult.tagsVerified} verified.`,
-        );
-
-        return {
-            customersUpserted: refreshResult.customersUpserted ?? 0,
-            ordersUpserted: refreshResult.ordersUpserted ?? 0,
-            processed: opsResult.processed ?? 0,
-            matched: opsResult.matched ?? 0,
-            tagsApplied: opsResult.tagsApplied ?? 0,
-        };
-    } catch (e: any) {
-        console.error("[auto-sync] Full sync error:", e);
-
-        // Write the failure to sync_runs so it's visible in the admin UI.
-        try {
-            const sb = getSupabaseServer();
-            const cfg = getIntegrationConfig();
-            await sb.from("sync_runs").insert({
-                clover_merchant_id: cfg.clover.merchantId,
-                kind: "auto",
-                status: "failed",
-                errors: JSON.stringify([e?.message ?? String(e)]),
-                started_at: new Date().toISOString(),
-                finished_at: new Date().toISOString(),
-            });
-        } catch (dbErr) {
-            // DB itself may be down — log and continue.
-            console.error("[auto-sync] Also failed to write failure record to DB:", dbErr);
-        }
-
-        throw e;
+        const sb = getSupabaseServer();
+        const cfg = getIntegrationConfig();
+        await sb.from("sync_runs").insert({
+            clover_merchant_id: cfg.clover.merchantId,
+            kind: "auto",
+            status: "failed",
+            errors: JSON.stringify([e?.message ?? String(e)]),
+            started_at: new Date().toISOString(),
+            finished_at: new Date().toISOString(),
+        });
+    } catch (dbErr) {
+        console.error("[sync] Failed to write failure record to DB:", dbErr);
     }
 }
