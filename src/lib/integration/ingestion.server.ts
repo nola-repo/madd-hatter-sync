@@ -459,7 +459,7 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
             .from("orders")
             .select("clover_order_id")
             .eq("payment_status", "PAID")
-            .in("status", ["pending", "error"])
+            .in("status", ["pending", "error", "held_for_review"])
             .order("created_time", { ascending: false })
             .limit(250);
         if (eErr) throw new Error(`fetch eligible for sync: ${eErr.message}`);
