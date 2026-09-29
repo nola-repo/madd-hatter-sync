@@ -5,37 +5,32 @@ import { processPendingPurchases } from "@/lib/integration/purchase-ops.server";
 import { getIntegrationConfig } from "@/lib/integration/config.server";
 import { getSupabaseServer } from "@/lib/integration/supabase.server";
 
-
 // -------------------------------------------------------------------------
 // /api/sync — Automatic sync entry point
+//
+// IMPORTANT: This app runs on GHL AI Studio (Cloudflare Workers / Nitro).
+// That is a SERVERLESS / EDGE runtime. There are no background threads.
+// Any fire-and-forget `.catch()` pattern is KILLED the instant the response
+// is sent. ALL async work MUST be awaited before returning a Response.
 //
 // This endpoint serves two purposes:
 //
 // 1. CLOVER WEBHOOKS (POST)
 //    Configure this URL in Clover Dashboard → App Settings → Webhooks.
 //    Clover will POST when orders are created/updated or payments clear.
-//    We immediately sync the specific order to GHL (tags + custom object).
+//    We synchronously sync the specific order to GHL (tags + custom object).
 //
-//    Supported events:
-//      - PAYMENT           → sync the order tied to the payment
-//      - ORDER             → sync the order directly
-//      - order.created     → sync the order
-//      - order.updated     → sync the order
-//      - payment.created   → sync the order
-//
-// 2. CRON / UPTIME PING (GET)
-//    Hit GET /api/sync?secret=SYNC_SECRET to trigger a full background
-//    refresh without pressing any button. Configure your hosting provider's
-//    cron (Vercel Cron, Render Cron, UptimeRobot, cron-job.org) to call
-//    this URL every 15–30 minutes.
-//
-//    Returns immediately with { queued: true } so cron doesn't time out.
+// 2. CRON PING (GET)
+//    Hit GET /api/sync?secret=SYNC_SECRET to trigger a full background refresh.
+//    Configure cron-job.org to call this URL every 15–30 minutes.
+//    The cron timeout must be >= 60 seconds (set to 120s in cron-job.org settings).
+//    Returns the full sync result once complete.
 // -------------------------------------------------------------------------
 
 export const Route = createFileRoute("/api/sync")({
     server: {
         handlers: {
-            // ---- GET: triggered by cron or health check -----------------
+            // ---- GET: triggered by cron ---------------------------------
             GET: async ({ request }) => {
                 const url = new URL(request.url);
                 const secret = url.searchParams.get("secret");
@@ -47,21 +42,19 @@ export const Route = createFileRoute("/api/sync")({
                     return Response.json({ error: "Unauthorized" }, { status: 401 });
                 }
 
-                // Run full pipeline and await it.
-                // In Serverless environments (Vercel/Netlify), returning a response
-                // immediately will freeze the Node.js process and kill the background sync.
+                // MUST await — GHL AI Studio (Cloudflare Workers) kills background tasks.
                 try {
-                    await runFullSync();
+                    const result = await runFullSync();
                     return Response.json({
-                        success: true,
+                        ok: true,
                         message: "Full sync completed.",
                         timestamp: new Date().toISOString(),
+                        ...result,
                     });
                 } catch (e: any) {
-                    console.error("[auto-sync] Full sync failed:", e);
                     return Response.json({
-                        success: false,
-                        error: e?.message ?? "Unknown error",
+                        ok: false,
+                        error: e?.message ?? "Sync failed",
                         timestamp: new Date().toISOString(),
                     }, { status: 500 });
                 }
@@ -104,13 +97,10 @@ export const Route = createFileRoute("/api/sync")({
                     }
 
                     // For payment events, Clover gives us the payment ID.
-                    // For order events, it gives us the order ID directly.
-                    // We resolve to an order ID and sync it immediately.
+                    // Run a full refresh to pick up newly paid orders.
                     if (eventType === "PAYMENT" || eventType.includes("PAYMENT")) {
-                        // Payment objectId IS the payment id; we need to look up the order.
-                        // Run a quick full refresh which will pick up new paid orders.
-                        runFullSync().catch((e) => console.error("[clover-webhook] sync failed:", e));
-                        return Response.json({ ok: true, action: "full_sync_queued", event: eventType });
+                        await runFullSync();
+                        return Response.json({ ok: true, action: "full_sync_completed", event: eventType });
                     }
 
                     if (
@@ -131,8 +121,8 @@ export const Route = createFileRoute("/api/sync")({
                             reviewReason: null,
                         }));
 
-                        // Also run pending purchase ops (tags) in background
-                        processPendingPurchases(50).catch((e) =>
+                        // Also run pending purchase ops (tags) — must await on serverless!
+                        await processPendingPurchases(50).catch((e) =>
                             console.error("[clover-webhook] purchase ops failed:", e),
                         );
 
@@ -147,7 +137,7 @@ export const Route = createFileRoute("/api/sync")({
                     }
 
                     // Unknown event type — run full sync as fallback
-                    runFullSync().catch((e) => console.error("[clover-webhook] fallback sync failed:", e));
+                    await runFullSync();
                     return Response.json({ ok: true, action: "fallback_full_sync", event: eventType });
                 } catch (e: any) {
                     console.error("[clover-webhook] handler error:", e);
@@ -158,31 +148,45 @@ export const Route = createFileRoute("/api/sync")({
     },
 });
 
-// ---- Full pipeline sync (background) -----------------------------------
+// ---- Full pipeline sync ------------------------------------------------
 
-async function runFullSync() {
+async function runFullSync(): Promise<{
+    customersUpserted: number;
+    ordersUpserted: number;
+    processed: number;
+    matched: number;
+    tagsApplied: number;
+}> {
     console.log("[auto-sync] Starting full refresh pipeline...");
+    let refreshResult: any = {};
+    let opsResult: any = {};
     try {
         // Step 1: Pull all data from Clover into Supabase
-        const result = await refreshPosData();
+        refreshResult = await refreshPosData();
         console.log(
-            `[auto-sync] Clover refresh done: ${result.customersUpserted} customers, ` +
-            `${result.ordersUpserted} orders, ${result.orderItemsUpserted} items.`,
+            `[auto-sync] Clover refresh done: ${refreshResult.customersUpserted} customers, ` +
+            `${refreshResult.ordersUpserted} orders, ${refreshResult.orderItemsUpserted} items.`,
         );
 
-
-        // Step 2: Match customers and apply GHL tags + create POS Purchase Item records
-        const ops = await processPendingPurchases(200);
+        // Step 2: Match customers, auto-create GHL contacts, apply tags + POS Purchase Items
+        opsResult = await processPendingPurchases(200);
         console.log(
-            `[auto-sync] Purchase ops done: ${ops.processed} customers, ` +
-            `${ops.matched} matched, ${ops.tagsApplied} tags applied, ` +
-            `${ops.tagsVerified} verified.`,
+            `[auto-sync] Purchase ops done: ${opsResult.processed} customers, ` +
+            `${opsResult.matched} matched, ${opsResult.tagsApplied} tags applied, ` +
+            `${opsResult.tagsVerified} verified.`,
         );
+
+        return {
+            customersUpserted: refreshResult.customersUpserted ?? 0,
+            ordersUpserted: refreshResult.ordersUpserted ?? 0,
+            processed: opsResult.processed ?? 0,
+            matched: opsResult.matched ?? 0,
+            tagsApplied: opsResult.tagsApplied ?? 0,
+        };
     } catch (e: any) {
         console.error("[auto-sync] Full sync error:", e);
 
-        // TASK 3 FIX: Write the failure to sync_runs so it's visible in the admin UI.
-        // Previously this was only printed to server logs, invisible to the admin.
+        // Write the failure to sync_runs so it's visible in the admin UI.
         try {
             const sb = getSupabaseServer();
             const cfg = getIntegrationConfig();
@@ -195,7 +199,7 @@ async function runFullSync() {
                 finished_at: new Date().toISOString(),
             });
         } catch (dbErr) {
-            // DB itself may be down — log and continue. Don't re-throw.
+            // DB itself may be down — log and continue.
             console.error("[auto-sync] Also failed to write failure record to DB:", dbErr);
         }
 
