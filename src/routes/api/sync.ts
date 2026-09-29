@@ -47,17 +47,24 @@ export const Route = createFileRoute("/api/sync")({
                     return Response.json({ error: "Unauthorized" }, { status: 401 });
                 }
 
-                // Run full pipeline in background (don't await — return immediately
-                // so uptime monitors don't time out on long syncs)
-                runFullSync().catch((e) =>
-                    console.error("[auto-sync] Unhandled background sync failure (already logged to DB):", e),
-                );
-
-                return Response.json({
-                    queued: true,
-                    message: "Full sync queued in background. Check Sync Logs for results.",
-                    timestamp: new Date().toISOString(),
-                });
+                // Run full pipeline and await it.
+                // In Serverless environments (Vercel/Netlify), returning a response
+                // immediately will freeze the Node.js process and kill the background sync.
+                try {
+                    await runFullSync();
+                    return Response.json({
+                        success: true,
+                        message: "Full sync completed.",
+                        timestamp: new Date().toISOString(),
+                    });
+                } catch (e: any) {
+                    console.error("[auto-sync] Full sync failed:", e);
+                    return Response.json({
+                        success: false,
+                        error: e?.message ?? "Unknown error",
+                        timestamp: new Date().toISOString(),
+                    }, { status: 500 });
+                }
             },
 
             // ---- POST: Clover webhook events ----------------------------
