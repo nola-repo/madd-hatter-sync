@@ -638,7 +638,8 @@ export async function findRecordByPurchaseReference(
     ];
 
     const LIMIT = 100;
-    const MAX_PAGES = 50;
+    const MAX_PAGES = 5; // 500 records max; local DB (order_items.ghl_record_id) handles most dedup cases
+
     for (const { path: basePath, version: ver } of basePathsWithVersion) {
         for (let page = 0; page < MAX_PAGES; page++) {
             const ep = `${basePath}?locationId=${cfg.ghl.locationId}&limit=${LIMIT}&skip=${page * LIMIT}`;

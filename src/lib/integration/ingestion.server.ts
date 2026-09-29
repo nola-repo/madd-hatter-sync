@@ -7,6 +7,8 @@ import { getIntegrationConfig } from "./config.server";
 import { getSupabaseServer } from "./supabase.server";
 import { syncOrderToGhl } from "./sync.server";
 import { processPendingPurchases } from "./purchase-ops.server";
+import { findPurchaseObjectSchema, validatePurchaseSchema } from "./ghl.server";
+
 import {
     rangeToMs,
     cloverDateFilter,
@@ -438,11 +440,21 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
     });
 
     // 10. Auto-sync eligible paid orders to the CRM (purchase records + tags).
-    // Processes orders that are PAID and not yet synced (pending or error status,
-    // or not yet matched through the GHL pipeline).
-    // Failure-isolated: one bad order never stops the rest.
+    // Fetch the GHL schema ONCE per run and pass it as a cached value to every
+    // syncOrderToGhl call — avoids probing 5 GHL endpoints per order (RC-7 fix).
     await safe("crm-sync", async () => {
         const sb = getSupabaseServer();
+
+        // Pre-fetch schema once for the entire batch.
+        let cachedSchema: { schema: any; schemaVal: any } | undefined;
+        try {
+            const { schema } = await findPurchaseObjectSchema();
+            const schemaVal = validatePurchaseSchema(schema);
+            cachedSchema = { schema, schemaVal };
+        } catch {
+            // Schema fetch failed — individual orders will fetch on their own.
+        }
+
         const { data: eligible, error: eErr } = await sb
             .from("orders")
             .select("clover_order_id")
@@ -453,7 +465,8 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
         if (eErr) throw new Error(`fetch eligible for sync: ${eErr.message}`);
         for (const o of eligible ?? []) {
             try {
-                const result = await syncOrderToGhl(o.clover_order_id);
+                const result = await syncOrderToGhl(o.clover_order_id, cachedSchema);
+
                 if (result.outcome === "synced" || result.outcome === "partial") {
                     counters.crmOrdersSynced += 1;
                     counters.crmPurchaseRecordsCreated += result.itemsSynced;

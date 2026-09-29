@@ -238,15 +238,11 @@ export async function processPendingPurchases(limit = 100): Promise<ProcessPendi
                     }
                 }
 
-                // Also trigger POS Purchase Item custom object creation for this customer's orders
-                for (const ord of custOrders ?? []) {
-                    try {
-                        const { syncOrderToGhl } = await import("./sync.server");
-                        await syncOrderToGhl(ord.clover_order_id);
-                    } catch {
-                        // Non-blocking for purchase tags
-                    }
-                }
+                // NOTE: syncOrderToGhl is intentionally NOT called here.
+                // The main ingestion pipeline (ingestion.server.ts crm-sync step)
+                // already ran syncOrderToGhl for all eligible PAID orders before
+                // processPendingPurchases is invoked. Re-calling it here would
+                // double every GHL API request and risk duplicate purchase records.
             }
 
             summary.details.push({

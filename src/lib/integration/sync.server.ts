@@ -11,7 +11,10 @@ import {
     findPurchaseObjectSchema,
     findRecordByPurchaseReference,
     validatePurchaseSchema,
+    type CustomObjectSchema,
+    type SchemaValidation,
 } from "./ghl.server";
+
 import { assessOrderEligibility, purchaseReference } from "./matching.server";
 import {
     matchCloverCustomerToGhlContact,
@@ -40,7 +43,11 @@ import {
 import { getIntegrationConfig } from "./config.server";
 import type { CloverOrder, SyncResult } from "./types";
 
-export async function syncOrderToGhl(orderId: string): Promise<SyncResult> {
+export async function syncOrderToGhl(
+    orderId: string,
+    cached?: { schema: CustomObjectSchema | null; schemaVal: SchemaValidation },
+): Promise<SyncResult> {
+
     const cfg = getIntegrationConfig();
     const merchantId = cfg.clover.merchantId;
 
@@ -107,7 +114,8 @@ export async function syncOrderToGhl(orderId: string): Promise<SyncResult> {
     const attempt = await createSyncAttempt(orderRow.id, attemptNum);
 
     try {
-        const result = await runSync(order, orderRow.id);
+        const result = await runSync(order, orderRow.id, cached);
+
         await finishSyncAttempt(attempt.id, {
             status: result.outcome,
             outcome_message: result.message,
@@ -159,13 +167,27 @@ export async function syncOrderToGhl(orderId: string): Promise<SyncResult> {
     }
 }
 
-async function runSync(order: CloverOrder, orderRowId: string): Promise<SyncResult> {
+async function runSync(
+    order: CloverOrder,
+    orderRowId: string,
+    cached?: { schema: CustomObjectSchema | null; schemaVal: SchemaValidation },
+): Promise<SyncResult> {
     const cfg = getIntegrationConfig();
     const orderElig = assessOrderEligibility(order);
 
-    // Schema must be valid before writing any records.
-    const schema = await findPurchaseObjectSchema();
-    const schemaVal = validatePurchaseSchema(schema);
+    // Schema: use cached value from batch run if available, otherwise fetch fresh.
+    // This avoids probing 5 GHL endpoints per order during batch sync (RC-7 fix).
+    let schema: CustomObjectSchema | null;
+    let schemaVal: SchemaValidation;
+    if (cached) {
+        schema = cached.schema;
+        schemaVal = cached.schemaVal;
+    } else {
+        const discovered = await findPurchaseObjectSchema();
+        schema = discovered.schema;
+        schemaVal = validatePurchaseSchema(schema);
+    }
+
     if (!schemaVal.ok || !schema) {
         return {
             outcome: "error",

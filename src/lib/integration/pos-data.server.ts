@@ -685,3 +685,141 @@ export async function getOrderDetail(orderId: string): Promise<OrderDetailRow | 
         })),
     };
 }
+
+// ---- Customer Purchases with item breakdown ----------------------------
+
+export type CustomerPurchaseRow = {
+    cloverCustomerId: string;
+    customerName: string;
+    email: string | null;
+    phone: string | null;
+    ghlContactId: string | null;
+    matchStatus: string;
+    matchMethod: string | null;
+    orderCount: number;
+    totalSpendCents: number;
+    lastVisitMs: number;
+    itemsPurchased: Array<{ name: string; qty: number; category: string | null }>;
+};
+
+export async function listCustomersWithPurchases(opts: {
+    search?: string;
+    limit?: number;
+    offset?: number;
+}): Promise<{ rows: CustomerPurchaseRow[]; total: number }> {
+    const sb = getSupabaseServer();
+    const limit = opts.limit ?? 25;
+    const offset = opts.offset ?? 0;
+
+    // 1. Get all distinct customer IDs from orders
+    const { data: orderRows } = await sb
+        .from("orders")
+        .select("clover_customer_id, clover_order_id, id, total_cents, created_time, net_sales_cents")
+        .not("clover_customer_id", "is", null)
+        .limit(10000);
+
+    // Aggregate per customer
+    const custAgg = new Map<string, { orderIds: string[]; totalCents: number; lastVisitMs: number }>();
+    for (const o of orderRows ?? []) {
+        const cid = o.clover_customer_id as string;
+        const existing = custAgg.get(cid) ?? { orderIds: [], totalCents: 0, lastVisitMs: 0 };
+        existing.orderIds.push(o.id);
+        existing.totalCents += o.net_sales_cents ?? o.total_cents ?? 0;
+        const ts = typeof o.created_time === "number" ? o.created_time : 0;
+        if (ts > existing.lastVisitMs) existing.lastVisitMs = ts;
+        custAgg.set(cid, existing);
+    }
+
+    let customerIds = [...custAgg.keys()];
+
+    // 2. Load customer profiles
+    const { data: customers } = await sb
+        .from("customers")
+        .select("clover_customer_id, first_name, last_name, email, phone")
+        .in("clover_customer_id", customerIds)
+        .limit(10000);
+
+    const custMap = new Map((customers ?? []).map((c: any) => [c.clover_customer_id, c]));
+
+    // 3. Apply search filter
+    if (opts.search?.trim()) {
+        const q = opts.search.trim().toLowerCase();
+        customerIds = customerIds.filter((cid) => {
+            const c = custMap.get(cid);
+            const name = c ? [c.first_name, c.last_name].filter(Boolean).join(" ").toLowerCase() : "";
+            const email = (c?.email ?? "").toLowerCase();
+            const phone = (c?.phone ?? "").toLowerCase();
+            return name.includes(q) || email.includes(q) || phone.includes(q) || cid.includes(q);
+        });
+    }
+
+    const total = customerIds.length;
+
+    // 4. Page the customer list
+    const pagedIds = customerIds.slice(offset, offset + limit);
+    if (pagedIds.length === 0) return { rows: [], total };
+
+    // 5. Load CRM mappings
+    const { data: mappings } = await sb
+        .from("customer_mappings")
+        .select("clover_customer_id, ghl_contact_id, match_method, matched_by")
+        .in("clover_customer_id", pagedIds);
+    const mappingMap = new Map((mappings ?? []).map((m: any) => [m.clover_customer_id, m]));
+
+    // 6. Load all order items for paged customers' orders in one batch query
+    const allOrderIds = pagedIds.flatMap((cid) => custAgg.get(cid)?.orderIds ?? []);
+    const { data: items } = allOrderIds.length > 0
+        ? await sb
+            .from("order_items")
+            .select("order_id, item_name, category, quantity")
+            .in("order_id", allOrderIds)
+        : { data: [] };
+
+    // Group items by order_id → then by customer via the order lookup
+    const orderOwnerMap = new Map<string, string>(); // orderId → cloverCustomerId
+    for (const [cid, agg] of custAgg.entries()) {
+        for (const oid of agg.orderIds) orderOwnerMap.set(oid, cid);
+    }
+    const custItemsMap = new Map<string, Map<string, { qty: number; category: string | null }>>();
+    for (const item of items ?? []) {
+        const cid = orderOwnerMap.get(item.order_id);
+        if (!cid) continue;
+        if (!custItemsMap.has(cid)) custItemsMap.set(cid, new Map());
+        const itemMap = custItemsMap.get(cid)!;
+        const normName = (item.item_name ?? "").trim();
+        if (!normName) continue;
+        const existing = itemMap.get(normName) ?? { qty: 0, category: item.category ?? null };
+        existing.qty += item.quantity ?? 1;
+        itemMap.set(normName, existing);
+    }
+
+    // 7. Assemble rows
+    const rows: CustomerPurchaseRow[] = pagedIds.map((cid) => {
+        const cust = custMap.get(cid);
+        const mapping = mappingMap.get(cid);
+        const agg = custAgg.get(cid)!;
+        const itemMap = custItemsMap.get(cid) ?? new Map();
+        const matchStatus = mapping
+            ? "MATCHED"
+            : cust?.email || cust?.phone
+              ? "NO_GHL_MATCH"
+              : "NO_IDENTIFIERS";
+        return {
+            cloverCustomerId: cid,
+            customerName: cust ? [cust.first_name, cust.last_name].filter(Boolean).join(" ") || "Clover Customer" : "Unknown",
+            email: cust?.email ?? null,
+            phone: cust?.phone ?? null,
+            ghlContactId: mapping?.ghl_contact_id ?? null,
+            matchStatus,
+            matchMethod: mapping?.match_method ?? mapping?.matched_by ?? null,
+            orderCount: agg.orderIds.length,
+            totalSpendCents: agg.totalCents,
+            lastVisitMs: agg.lastVisitMs,
+            itemsPurchased: [...itemMap.entries()]
+                .map(([name, { qty, category }]) => ({ name, qty, category }))
+                .sort((a, b) => b.qty - a.qty),
+        };
+    });
+
+    return { rows, total };
+}

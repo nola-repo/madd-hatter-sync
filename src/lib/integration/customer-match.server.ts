@@ -566,21 +566,33 @@ export async function getReviewQueue(limit = 50): Promise<ReviewQueueItem[]> {
         .from("match_audit_log")
         .select("*")
         .in("match_status", ["NEEDS_REVIEW", "AMBIGUOUS_MATCH", "CONFLICT", "NO_IDENTIFIERS"])
+        .eq("clover_merchant_id", cfg.clover.merchantId)
         .order("created_at", { ascending: false })
         .limit(limit * 3);
 
     // Deduplicate by customer, keeping the latest.
     const seen = new Set<string>();
-    const items: ReviewQueueItem[] = [];
+    const deduped: typeof data = [];
     for (const row of data ?? []) {
         if (seen.has(row.clover_customer_id)) continue;
         seen.add(row.clover_customer_id);
-        const { data: cust } = await sb
-            .from("customers")
-            .select("first_name, last_name, email, phone")
-            .eq("clover_customer_id", row.clover_customer_id)
-            .maybeSingle();
-        items.push({
+        deduped.push(row);
+        if (deduped.length >= limit) break;
+    }
+
+    if (deduped.length === 0) return [];
+
+    // FIXED: Single batch query instead of N+1 per-row queries.
+    const customerIds = deduped.map((r) => r.clover_customer_id);
+    const { data: custsArr } = await sb
+        .from("customers")
+        .select("clover_customer_id, first_name, last_name, email, phone")
+        .in("clover_customer_id", customerIds);
+    const custMap = new Map((custsArr ?? []).map((c) => [c.clover_customer_id, c]));
+
+    const items: ReviewQueueItem[] = deduped.map((row) => {
+        const cust = custMap.get(row.clover_customer_id);
+        return {
             cloverCustomerId: row.clover_customer_id,
             customerName: cust ? [cust.first_name, cust.last_name].filter(Boolean).join(" ") : "Unknown",
             email: cust?.email ?? row.match_evidence?.cloverEmail ?? null,
@@ -589,9 +601,9 @@ export async function getReviewQueue(limit = 50): Promise<ReviewQueueItem[]> {
             reason: row.match_evidence?.reason ?? row.match_status,
             evidence: row.match_evidence,
             createdAt: row.created_at,
-        });
-        if (items.length >= limit) break;
-    }
+        };
+    });
+
     return items;
 }
 

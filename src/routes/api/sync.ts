@@ -3,6 +3,8 @@ import { refreshPosData } from "@/lib/integration/ingestion.server";
 import { syncOrderToGhl } from "@/lib/integration/sync.server";
 import { processPendingPurchases } from "@/lib/integration/purchase-ops.server";
 import { getIntegrationConfig } from "@/lib/integration/config.server";
+import { getSupabaseServer } from "@/lib/integration/supabase.server";
+
 
 // -------------------------------------------------------------------------
 // /api/sync — Automatic sync entry point
@@ -47,7 +49,9 @@ export const Route = createFileRoute("/api/sync")({
 
                 // Run full pipeline in background (don't await — return immediately
                 // so uptime monitors don't time out on long syncs)
-                runFullSync().catch((e) => console.error("[auto-sync] background sync failed:", e));
+                runFullSync().catch((e) =>
+                    console.error("[auto-sync] Unhandled background sync failure (already logged to DB):", e),
+                );
 
                 return Response.json({
                     queued: true,
@@ -156,8 +160,9 @@ async function runFullSync() {
         const result = await refreshPosData();
         console.log(
             `[auto-sync] Clover refresh done: ${result.customersUpserted} customers, ` +
-            `${result.ordersUpserted} orders, ${result.itemsUpserted} items.`,
+            `${result.ordersUpserted} orders, ${result.orderItemsUpserted} items.`,
         );
+
 
         // Step 2: Match customers and apply GHL tags + create POS Purchase Item records
         const ops = await processPendingPurchases(200);
@@ -166,8 +171,27 @@ async function runFullSync() {
             `${ops.matched} matched, ${ops.tagsApplied} tags applied, ` +
             `${ops.tagsVerified} verified.`,
         );
-    } catch (e) {
+    } catch (e: any) {
         console.error("[auto-sync] Full sync error:", e);
+
+        // TASK 3 FIX: Write the failure to sync_runs so it's visible in the admin UI.
+        // Previously this was only printed to server logs, invisible to the admin.
+        try {
+            const sb = getSupabaseServer();
+            const cfg = getIntegrationConfig();
+            await sb.from("sync_runs").insert({
+                clover_merchant_id: cfg.clover.merchantId,
+                kind: "auto",
+                status: "failed",
+                errors: JSON.stringify([e?.message ?? String(e)]),
+                started_at: new Date().toISOString(),
+                finished_at: new Date().toISOString(),
+            });
+        } catch (dbErr) {
+            // DB itself may be down — log and continue. Don't re-throw.
+            console.error("[auto-sync] Also failed to write failure record to DB:", dbErr);
+        }
+
         throw e;
     }
 }

@@ -22,7 +22,9 @@ import {
     listEmployees,
     listCustomerDetails,
     getOrderDetail,
+    listCustomersWithPurchases,
 } from "./pos-data.server";
+
 import { refreshPosData, getLastSyncRun } from "./ingestion.server";
 import {
     findCustomersByItem,
@@ -321,6 +323,32 @@ export const getCustomersList = createServerFn({ method: "GET" })
             throw e;
         }
     });
+
+export const getCustomerPurchasesListFn = createServerFn({ method: "GET" })
+    .validator((data) =>
+        z
+            .object({
+                search: z.string().optional(),
+                limit: z.number().int().min(1).max(50).default(25),
+                offset: z.number().int().min(0).default(0),
+            })
+            .parse(data),
+    )
+    .handler(async ({ data }) => {
+        await requireAdmin();
+        try {
+            const res = await listCustomersWithPurchases({
+                search: data.search,
+                limit: data.limit,
+                offset: data.offset,
+            });
+            return { setupRequired: false as const, ...res };
+        } catch (e) {
+            if (isSetupRequired(e)) return setupRequiredResponse(e);
+            throw e;
+        }
+    });
+
 
 export const getProductsList = createServerFn({ method: "GET" })
     .validator((data) =>
