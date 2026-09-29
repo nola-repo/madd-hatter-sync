@@ -514,21 +514,40 @@ export async function createGhlContact(input: {
     lastName: string;
     email: string;
     phone: string;
+    note?: string;
 }): Promise<GhlContact> {
     const cfg = getIntegrationConfig();
-    const body = {
-        firstName: input.firstName || undefined,
-        lastName: input.lastName || undefined,
-        email: input.email || undefined,
-        phone: input.phone || undefined,
+    const body: Record<string, any> = {
         locationId: cfg.ghl.locationId,
+        tags: ["Clover POS Customer"],
+        source: "Clover POS",
     };
+    if (input.firstName) body["firstName"] = input.firstName;
+    if (input.lastName) body["lastName"] = input.lastName;
+    if (input.email) body["email"] = input.email;
+    if (input.phone) body["phone"] = input.phone;
+    if (input.note) body["customField"] = { clover_note: input.note };
     const json = await ghlFetch(`/contacts/`, {
         method: "POST",
         body: JSON.stringify(body),
     });
     const c = json?.contact ?? json;
     return mapContact({ id: c.id, ...c });
+}
+
+export async function searchContactsByName(name: string): Promise<GhlContact[]> {
+    const cfg = getIntegrationConfig();
+    const q = name.trim();
+    if (!q) return [];
+    try {
+        const json = await ghlFetch(
+            `/contacts/?locationId=${cfg.ghl.locationId}&query=${encodeURIComponent(q)}&limit=10`,
+        );
+        const list: any[] = json?.contacts ?? json?.data ?? [];
+        return list.map(mapContact);
+    } catch {
+        return [];
+    }
 }
 
 // ---- Custom object record create + associate ---------------------------

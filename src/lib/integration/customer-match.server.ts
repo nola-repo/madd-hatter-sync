@@ -2,17 +2,25 @@
 // Server-only: CENTRALIZED customer identity resolver.
 // This is the SINGLE source of truth for matching Clover customers to GHL contacts.
 //
-// SAFETY RULES (non-negotiable):
-//   - NEVER match by name alone.
-//   - NEVER create a new GHL contact for an unmatched Clover customer.
-//   - A false negative (UNMATCHED) is always safer than a false positive (wrong tag).
-//   - Conflicting email/phone evidence → CONFLICT, no automatic action.
+// MATCHING RULES (in priority order):
+//   A. Existing verified mapping — reuse it instantly.
+//   B. Email + phone both match the SAME GHL contact — confident match.
+//   C. Exact unique email match — confident match.
+//   D. Exact unique phone match — confident match.
+//   E. Name-only — auto-create new GHL contact if no match found.
+//   F. No identifiers at all — auto-create using name if available.
 //
+// Auto-create ensures every Clover purchase creates a POS Purchase Item in GHL.
 // Every decision is recorded in match_audit_log for full observability.
 import { getSupabaseServer } from "./supabase.server";
 import { getIntegrationConfig } from "./config.server";
 import { normalizeEmail, normalizePhone } from "./matching.server";
-import { searchContactsByEmail, searchContactsByPhone, type GhlContact } from "./ghl.server";
+import {
+    searchContactsByEmail,
+    searchContactsByPhone,
+    createGhlContact,
+    type GhlContact,
+} from "./ghl.server";
 
 // ---- Decision model ----------------------------------------------------
 
@@ -26,9 +34,11 @@ export type MatchStatus =
     | "NO_MATCH"
     | "NO_IDENTIFIERS"
     | "NEEDS_REVIEW"
-    | "NO_CUSTOMER";
+    | "NO_CUSTOMER"
+    | "AUTO_CREATED";
 
-export type MatchMethod = "mapping" | "email_phone" | "email" | "phone" | "none";
+export type MatchMethod = "mapping" | "email_phone" | "email" | "phone" | "none" | "auto_create";
+
 
 export type MatchEvidence = {
     cloverEmail: string | null;
@@ -148,14 +158,44 @@ export async function matchCloverCustomerToGhlContact(input: {
         };
     }
 
-    // No identifiers to search with.
+    // No identifiers to search with — auto-create a GHL contact using
+    // whatever we have (name, Clover ID) so POS Purchase Items still sync.
     if (!email && !phone) {
+        const contactName = input.customerName?.trim() ?? null;
+        if (contactName && contactName.length > 1) {
+            try {
+                const created = await createGhlContact({
+                    firstName: contactName.split(" ")[0] ?? contactName,
+                    lastName: contactName.split(" ").slice(1).join(" ") || "",
+                    email: "",
+                    phone: "",
+                    note: `Auto-created from Clover POS. Clover Customer ID: ${input.cloverCustomerId ?? "unknown"}`,
+                });
+                return {
+                    status: "AUTO_CREATED",
+                    ghlContactId: created.id,
+                    matchMethod: "auto_create",
+                    evidence: buildEvidence(null, null, [], []),
+                    reason: `No email/phone on Clover profile. Auto-created GHL contact for "${contactName}".`,
+                    confident: true,
+                };
+            } catch (createErr: any) {
+                return {
+                    status: "NO_IDENTIFIERS",
+                    ghlContactId: null,
+                    matchMethod: "none",
+                    evidence: buildEvidence(null, null, [], []),
+                    reason: `No email/phone. Auto-create failed: ${createErr?.message ?? "unknown error"}.`,
+                    confident: false,
+                };
+            }
+        }
         return {
             status: "NO_IDENTIFIERS",
             ghlContactId: null,
             matchMethod: "none",
             evidence: buildEvidence(null, null, [], []),
-            reason: "Customer has no usable email or phone — cannot match safely.",
+            reason: "Customer has no usable email, phone, or name — cannot match or create in GHL.",
             confident: false,
         };
     }
@@ -275,17 +315,35 @@ export async function matchCloverCustomerToGhlContact(input: {
         evidence.phoneCandidateIds = phoneMatches.map((c) => c.id);
     }
 
-    // RULE G — has identifiers but no match found.
-    // We do NOT create a contact. The customer remains unmatched.
-    return {
-        status: "NO_MATCH",
-        ghlContactId: null,
-        matchMethod: "none",
-        evidence,
-        reason:
-            "No existing GHL contact matches this customer's email or phone. Left unmatched — no contact created.",
-        confident: false,
-    };
+    // RULE G — has identifiers but no match found in GHL.
+    // Auto-create a GHL contact so the purchase record can still be created.
+    const contactName = input.customerName?.trim() ?? null;
+    try {
+        const created = await createGhlContact({
+            firstName: contactName ? (contactName.split(" ")[0] ?? contactName) : "Clover",
+            lastName: contactName ? (contactName.split(" ").slice(1).join(" ") || "Customer") : "Customer",
+            email: email || "",
+            phone: phone || "",
+            note: `Auto-created from Clover POS. Clover Customer ID: ${input.cloverCustomerId ?? "unknown"}`,
+        });
+        return {
+            status: "AUTO_CREATED",
+            ghlContactId: created.id,
+            matchMethod: "auto_create",
+            evidence,
+            reason: `No existing GHL contact found. Auto-created new contact for "${contactName ?? "Clover Customer"}" with available identifiers.`,
+            confident: true,
+        };
+    } catch (createErr: any) {
+        return {
+            status: "NO_MATCH",
+            ghlContactId: null,
+            matchMethod: "none",
+            evidence,
+            reason: `No existing GHL contact found and auto-create failed: ${createErr?.message ?? "unknown"}.`,
+            confident: false,
+        };
+    }
 }
 
 // ---- Audit logging -----------------------------------------------------
