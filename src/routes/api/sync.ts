@@ -32,6 +32,12 @@ export const Route = createFileRoute("/api/sync")({
                 const url = new URL(request.url);
                 const secret = url.searchParams.get("secret");
                 const step = url.searchParams.get("step"); // "fetch" | "push" | null (both)
+                
+                const batchLimit = Math.min(
+                    50,
+                    Math.max(1, parseInt(url.searchParams.get("limit") ?? "10", 10) || 10),
+                );
+
                 const cfg = getIntegrationConfig();
 
                 // Validate the secret
@@ -49,13 +55,13 @@ export const Route = createFileRoute("/api/sync")({
 
                     if (step === "push") {
                         // Step B only: Supabase → GHL contacts + Purchase Items (fast with small limit)
-                        const result = await stepPush(25);
+                        const result = await stepPush(batchLimit);
                         return Response.json({ ok: true, step: "push", ...result });
                     }
 
                     // No step specified: run both (may be slow, only use for manual testing)
                     const fetchResult = await stepFetch();
-                    const pushResult = await stepPush(25);
+                    const pushResult = await stepPush(batchLimit);
                     return Response.json({
                         ok: true,
                         step: "both",

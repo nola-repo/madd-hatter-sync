@@ -463,7 +463,19 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
             .order("created_time", { ascending: false })
             .limit(250);
         if (eErr) throw new Error(`fetch eligible for sync: ${eErr.message}`);
+
+        // 2. Sync eligible paid orders to the CRM (purchase records + associations).
+        // Time-boxed loop: abort if we approach 22s so cron-job.org never sees a 30s timeout.
+        const startTime = Date.now();
+        const maxElapsedMs = 20_000;
+
         for (const o of eligible ?? []) {
+            // Check if we're running low on time
+            if (Date.now() - startTime > maxElapsedMs) {
+                console.log(`[sync] time ceiling reached (${Date.now() - startTime}ms), pausing batch.`);
+                break;
+            }
+
             try {
                 const result = await syncOrderToGhl(o.clover_order_id, cachedSchema);
 
