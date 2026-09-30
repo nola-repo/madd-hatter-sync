@@ -29,6 +29,9 @@ async function ghlFetch(
         headers: {
             Authorization: `Bearer ${rawToken}`,
             Version: version,
+            // channelId is required for subaccount-scoped Private Integration Tokens.
+            // Without it GHL silently rejects or scope-downs requests on subaccount endpoints.
+            channelId: cfg.ghl.locationId,
             Accept: "application/json",
             ...(init.body ? { "Content-Type": "application/json" } : {}),
             ...(init.headers || {}),
@@ -73,6 +76,8 @@ export async function checkGhlConnection(): Promise<GhlConnectionDetail> {
             headers: {
                 Authorization: `Bearer ${rawToken}`,
                 Version: "2021-07-28",
+                // channelId is required for subaccount-scoped Private Integration Tokens.
+                channelId: cfg.ghl.locationId,
                 Accept: "application/json",
             },
         });
@@ -182,26 +187,26 @@ export async function findPurchaseObjectSchema(): Promise<{
     // 1. GET /objects/?locationId={locationId} with Version: "v3" returns all objects for the location.
     // 2. GET /objects/{key}?locationId={locationId}&fetchProperties=true with Version: "v3" returns the schema and all fields.
     const endpointsToTry: Array<{ path: string; version: string }> = [
-        // Primary: Get all objects for location with v3
-        { path: `/objects/?locationId=${cfg.ghl.locationId}`, version: "v3" },
+        // Primary: Get all objects for location — documented Version date string
+        { path: `/objects/?locationId=${cfg.ghl.locationId}`, version: "2021-07-28" },
         // Specific object schema by exact custom_objects key with fields
         {
             path: `/objects/custom_objects.pos_purchase_item?locationId=${cfg.ghl.locationId}&fetchProperties=true`,
-            version: "v3",
+            version: "2021-07-28",
         },
         // Specific object schema by ID with fields
         {
             path: `/objects/${objectId}?locationId=${cfg.ghl.locationId}&fetchProperties=true`,
-            version: "v3",
+            version: "2021-07-28",
         },
         // Without fetchProperties
         {
             path: `/objects/custom_objects.pos_purchase_item?locationId=${cfg.ghl.locationId}`,
-            version: "v3",
+            version: "2021-07-28",
         },
         {
             path: `/objects/${objectId}?locationId=${cfg.ghl.locationId}`,
-            version: "v3",
+            version: "2021-07-28",
         },
     ];
 
@@ -315,7 +320,7 @@ export async function findPurchaseObjectSchema(): Promise<{
                     ];
                     for (const dep of detailEndpoints) {
                         try {
-                            const detail = await ghlFetch(dep, {}, "v3");
+                            const detail = await ghlFetch(dep, {}, "2021-07-28");
                             if (detail) {
                                 fieldsRaw = detail.fields ?? detail.customFields ?? detail.properties ?? [];
                                 if (fieldsRaw.length > 0) break;
@@ -471,15 +476,15 @@ export async function searchContactsByPhone(phone: string): Promise<GhlContact[]
     // (+12015543794, 2015543794, 12015543794) and the search/duplicate
     // endpoints match on exact strings, so we try each one.
     const variants = new Set<string>([cleanPhone]);
-    const digits = cleanPhone.replace(/\D/g, "");
-    if (digits.length === 11 && digits.startsWith("1")) {
-        variants.add(`+1${digits.slice(1)}`);
-        variants.add(digits.slice(1));
-    } else if (digits.length === 10) {
-        variants.add(`+1${digits}`);
-        variants.add(`1${digits}`);
+    const queryDigits = cleanPhone.replace(/\D/g, "");
+    if (queryDigits.length === 11 && queryDigits.startsWith("1")) {
+        variants.add(`+1${queryDigits.slice(1)}`);
+        variants.add(queryDigits.slice(1));
+    } else if (queryDigits.length === 10) {
+        variants.add(`+1${queryDigits}`);
+        variants.add(`1${queryDigits}`);
     }
-    variants.add(`+${digits}`);
+    variants.add(`+${queryDigits}`);
 
     for (const v of variants) {
         const queries = [
@@ -492,7 +497,18 @@ export async function searchContactsByPhone(phone: string): Promise<GhlContact[]
                 const json = await ghlFetch(path);
                 const list: any[] = json?.contacts ?? json?.data ?? (json?.contact ? [json.contact] : []);
                 const mapped = list.map(mapContact);
-                if (mapped.length > 0) return mapped;
+                // Verify the returned contacts actually share significant digits with the
+                // query to prevent fuzzy false matches from the /contacts/?query= endpoint.
+                const verified = mapped.filter((c) => {
+                    const contactDigits = c.phone.replace(/\D/g, "");
+                    // Match if either ends-with the other (handles +1 prefix differences)
+                    return (
+                        contactDigits.endsWith(queryDigits) ||
+                        queryDigits.endsWith(contactDigits) ||
+                        contactDigits === queryDigits
+                    );
+                });
+                if (verified.length > 0) return verified;
             } catch {
                 // Continue trying next endpoint/variant
             }
@@ -531,7 +547,9 @@ export async function createGhlContact(input: {
     if (input.email) body["email"] = input.email;
     if (input.phone) body["phone"] = input.phone;
     if (input.note) body["customField"] = { clover_note: input.note };
-    const json = await ghlFetch(`/contacts/`, {
+    // Use the upsert endpoint so GHL deduplicates on email/phone per
+    // subaccount settings instead of always creating a new record.
+    const json = await ghlFetch(`/contacts/upsert`, {
         method: "POST",
         body: JSON.stringify(body),
     });

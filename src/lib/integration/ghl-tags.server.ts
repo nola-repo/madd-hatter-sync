@@ -15,6 +15,22 @@ class GhlApiError extends Error {
 }
 
 /**
+ * Build the standard GHL request headers, including the channelId that is
+ * required for subaccount-scoped Private Integration Tokens. Without it,
+ * tag operations silently fail with 401/403 despite the connection showing 200.
+ */
+function ghlHeaders(cfg: ReturnType<typeof getIntegrationConfig>, extra: Record<string, string> = {}): Record<string, string> {
+    return {
+        Authorization: `Bearer ${cfg.ghl.pitToken?.trim() ?? ""}`,
+        Version: "2021-07-28",
+        // channelId is required for subaccount-scoped Private Integration Tokens.
+        channelId: cfg.ghl.locationId,
+        Accept: "application/json",
+        ...extra,
+    };
+}
+
+/**
  * Normalize an item name for consistent tag naming.
  * "WINGS", "Wings", "  wings " all become "Wings".
  */
@@ -50,11 +66,7 @@ export type TagVerificationResult = {
 export async function getContactTags(contactId: string): Promise<string[]> {
     const cfg = getIntegrationConfig();
     const res = await fetch(`${cfg.ghl.apiBase}/contacts/${contactId}`, {
-        headers: {
-            Authorization: `Bearer ${cfg.ghl.pitToken?.trim() ?? ""}`,
-            Version: "2021-07-28",
-            Accept: "application/json",
-        },
+        headers: ghlHeaders(cfg),
     });
     const text = await res.text();
     if (!res.ok) throw new GhlApiError(res.status, text);
@@ -87,12 +99,7 @@ export async function applyPurchaseTag(contactId: string, itemName: string): Pro
         // Add the tag via the contacts/tags endpoint.
         const res = await fetch(`${cfg.ghl.apiBase}/contacts/${contactId}/tags`, {
             method: "POST",
-            headers: {
-                Authorization: `Bearer ${cfg.ghl.pitToken?.trim() ?? ""}`,
-                Version: "2021-07-28",
-                Accept: "application/json",
-                "Content-Type": "application/json",
-            },
+            headers: ghlHeaders(cfg, { "Content-Type": "application/json" }),
             body: JSON.stringify({ tags: [tag] }),
         });
         const text = await res.text();
