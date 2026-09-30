@@ -30,9 +30,16 @@ export async function listFilteredCustomersWithPurchases(opts: {
     );
   }
 
-  const { data: customers, count: totalCount } = await custQuery
-    .order("created_time", { ascending: false, nullsFirst: false })
-    .range(offset, offset + limit - 1);
+  const {
+    data: customers,
+    count: totalCount,
+    error: custErr,
+  } = await custQuery.order("created_at", { ascending: false }).range(offset, offset + limit - 1);
+
+  if (custErr) {
+    console.error("[CustomerPurchases] Error querying customers table:", custErr);
+  }
+
   if (!customers || customers.length === 0) {
     return { rows: [], total: totalCount ?? 0, crmLinkedTotal: globalCrmLinked ?? 0 };
   }
@@ -42,7 +49,7 @@ export async function listFilteredCustomersWithPurchases(opts: {
   // Step 2: Date-range filtering on orders
   let orderQuery = sb
     .from("orders")
-    .select("clover_order_id, clover_customer_id, total_cents, created_time");
+    .select("id, clover_order_id, clover_customer_id, total_cents, net_sales_cents, created_time");
 
   if (opts.range) {
     const { startMs, endMs } = rangeToMs(opts.range);
@@ -64,9 +71,9 @@ export async function listFilteredCustomersWithPurchases(opts: {
       lastVisit: 0,
       orderIds: [],
     };
-    existing.totalSpend += o.total_cents ?? 0;
+    existing.totalSpend += o.net_sales_cents ?? o.total_cents ?? 0;
     existing.count += 1;
-    existing.orderIds.push(o.clover_order_id);
+    existing.orderIds.push(o.id);
     if ((o.created_time ?? 0) > existing.lastVisit) {
       existing.lastVisit = o.created_time;
     }
@@ -99,15 +106,16 @@ export async function listFilteredCustomersWithPurchases(opts: {
 
     const { data: items } = await sb
       .from("order_items")
-      .select("clover_order_id, name, quantity")
-      .in("clover_order_id", relevantOrderIds.slice(0, 500));
+      .select("order_id, item_name, quantity")
+      .in("order_id", relevantOrderIds.slice(0, 500));
 
     for (const it of items ?? []) {
-      const cid = orderOwnerMap.get(it.clover_order_id);
-      if (!cid || !it.name) continue;
+      const cid = orderOwnerMap.get(it.order_id);
+      const name = it.item_name;
+      if (!cid || !name) continue;
       if (!custItemsMap.has(cid)) custItemsMap.set(cid, new Map());
       const imap = custItemsMap.get(cid)!;
-      imap.set(it.name, (imap.get(it.name) ?? 0) + (it.quantity ?? 1));
+      imap.set(name, (imap.get(name) ?? 0) + (it.quantity ?? 1));
     }
   }
 
