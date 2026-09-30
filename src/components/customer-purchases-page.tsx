@@ -108,6 +108,7 @@ export function CustomerPurchasesPage() {
   const [page, setPage] = useState(0);
   const [rows, setRows] = useState<CustomerPurchaseRow[]>([]);
   const [total, setTotal] = useState(0);
+  const [crmLinkedCount, setCrmLinkedCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -131,9 +132,12 @@ export function CustomerPurchasesPage() {
           setError("Integration not configured. Please complete setup in Settings.");
           return;
         }
-        const r = res as { rows: CustomerPurchaseRow[]; total: number };
+        const r = res as { rows: CustomerPurchaseRow[]; total: number; crmLinkedTotal?: number };
         setRows(r.rows ?? []);
         setTotal(r.total ?? 0);
+        if (typeof r.crmLinkedTotal === "number") {
+          setCrmLinkedCount(r.crmLinkedTotal);
+        }
       } catch (e: any) {
         setError(e?.message ?? "Failed to load customer purchases.");
       } finally {
@@ -178,9 +182,6 @@ export function CustomerPurchasesPage() {
       : rows.filter((r) => r.itemsPurchased.some((i) => i.name === productFilter));
 
   const totalPages = Math.ceil(total / LIMIT);
-  const matched = rows.filter(
-    (r) => r.matchStatus === "MATCHED" || r.matchStatus === "AUTO_CREATED",
-  ).length;
   const totalSpend = rows.reduce((s, r) => s + r.totalSpendCents, 0);
 
   return (
@@ -205,9 +206,13 @@ export function CustomerPurchasesPage() {
       <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
         {[
           { label: "Total Customers", value: total, color: "#111827" },
-          { label: "CRM Linked", value: matched, color: "#16a34a" },
-          { label: "No CRM Match", value: rows.length - matched, color: "#d97706" },
-          { label: "Total Spend", value: formatMoney(totalSpend), color: "#7c3aed" },
+          { label: "CRM Linked", value: crmLinkedCount, color: "#16a34a" },
+          {
+            label: "Unmatched / Unlinked",
+            value: Math.max(0, total - crmLinkedCount),
+            color: "#d97706",
+          },
+          { label: "Page Spend", value: formatMoney(totalSpend), color: "#7c3aed" },
         ].map((s) => (
           <div
             key={s.label}

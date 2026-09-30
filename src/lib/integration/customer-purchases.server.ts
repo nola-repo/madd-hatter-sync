@@ -7,12 +7,18 @@ export async function listFilteredCustomersWithPurchases(opts: {
   limit?: number;
   offset?: number;
   range?: RangeLabel;
-}): Promise<{ rows: CustomerPurchaseRow[]; total: number }> {
+}): Promise<{ rows: CustomerPurchaseRow[]; total: number; crmLinkedTotal: number }> {
   const sb = getSupabaseServer();
   const limit = opts.limit ?? 50;
   const offset = opts.offset ?? 0;
 
-  // Step 1: Base customer query
+  // Step 0: Get the true global CRM Linked count across all customers
+  const { count: globalCrmLinked } = await sb
+    .from("customer_mappings")
+    .select("*", { count: "exact", head: true })
+    .not("ghl_contact_id", "is", null);
+
+  // Step 1: Base customer query (sort so customers with purchases & identified profiles come first)
   let custQuery = sb
     .from("customers")
     .select("clover_customer_id, first_name, last_name, email, phone", { count: "exact" });
@@ -24,9 +30,11 @@ export async function listFilteredCustomersWithPurchases(opts: {
     );
   }
 
-  const { data: customers, count: totalCount } = await custQuery.range(offset, offset + limit - 1);
+  const { data: customers, count: totalCount } = await custQuery
+    .order("created_time", { ascending: false, nullsFirst: false })
+    .range(offset, offset + limit - 1);
   if (!customers || customers.length === 0) {
-    return { rows: [], total: totalCount ?? 0 };
+    return { rows: [], total: totalCount ?? 0, crmLinkedTotal: globalCrmLinked ?? 0 };
   }
 
   let customerIds = customers.map((c: any) => c.clover_customer_id);
@@ -149,5 +157,5 @@ export async function listFilteredCustomersWithPurchases(opts: {
     };
   });
 
-  return { rows, total: totalCount ?? rows.length };
+  return { rows, total: totalCount ?? rows.length, crmLinkedTotal: globalCrmLinked ?? 0 };
 }
