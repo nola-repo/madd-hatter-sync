@@ -140,7 +140,7 @@ export async function listFilteredCustomersWithPurchases(opts: {
     let ghlContactId: string | null = null;
 
     if (mapping && mapping.ghl_contact_id) {
-      matchStatus = mapping.match_method === "auto_create" ? "AUTO_CREATED" : "MATCHED";
+      matchStatus = "MATCHED";
       matchMethod = mapping.match_method ?? null;
       ghlContactId = mapping.ghl_contact_id ?? null;
     } else if (c.email || c.phone) {

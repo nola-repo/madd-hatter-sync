@@ -19,7 +19,7 @@ function formatDate(ms: number): string {
 function MatchBadge({ status }: { status: string }) {
   const map: Record<string, { color: string; bg: string; label: string }> = {
     MATCHED: { color: "#16a34a", bg: "#dcfce7", label: "CRM Matched" },
-    AUTO_CREATED: { color: "#0891b2", bg: "#cffafe", label: "Auto Created" },
+    AUTO_CREATED: { color: "#16a34a", bg: "#dcfce7", label: "CRM Matched" },
     NO_GHL_MATCH: { color: "#d97706", bg: "#fef9c3", label: "No CRM Match" },
     NO_IDENTIFIERS: { color: "#dc2626", bg: "#fee2e2", label: "No Contact Info" },
   };

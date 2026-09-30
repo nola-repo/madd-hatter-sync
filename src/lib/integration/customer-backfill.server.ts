@@ -32,6 +32,7 @@ import {
   searchContactsByPhone,
   type GhlContact,
 } from "./ghl.server";
+import { applyPurchaseTag, purchaseTagLabel, normalizeItemName } from "./ghl-tags.server";
 
 export type BackfillSummary = {
   scanned: number;
@@ -185,6 +186,67 @@ async function saveBackfillCursor(cursor: string | null): Promise<void> {
   }
 }
 
+// Helper to apply purchase tags for items this customer purchased
+async function applyCustomerPurchaseTags(
+  cloverCustomerId: string,
+  ghlContactId: string,
+): Promise<number> {
+  try {
+    const sb = getSupabaseServer();
+    // 1. Find all order IDs for this customer
+    const { data: orders } = await sb
+      .from("orders")
+      .select("id")
+      .eq("clover_customer_id", cloverCustomerId);
+
+    if (!orders || orders.length === 0) return 0;
+    const orderIds = orders.map((o) => o.id);
+
+    // 2. Find distinct item names purchased
+    const { data: items } = await sb
+      .from("order_items")
+      .select("item_name")
+      .in("order_id", orderIds.slice(0, 100));
+
+    if (!items || items.length === 0) return 0;
+    const uniqueItems = Array.from(new Set(items.map((it) => it.item_name).filter(Boolean)));
+
+    let taggedCount = 0;
+    for (const itemName of uniqueItems.slice(0, 15)) {
+      try {
+        const res = await withCrmRateLimitGuard(`tag ${ghlContactId} ${itemName}`, () =>
+          applyPurchaseTag(ghlContactId, itemName),
+        );
+        if (res.status === "applied" || res.status === "already_tagged") {
+          taggedCount += 1;
+          // Record in purchase_tags table
+          await sb.from("purchase_tags").upsert(
+            {
+              clover_merchant_id: getIntegrationConfig().clover.merchantId,
+              clover_customer_id: cloverCustomerId,
+              ghl_contact_id: ghlContactId,
+              item_name: itemName,
+              normalized_item_name: normalizeItemName(itemName),
+              expected_tag: purchaseTagLabel(itemName),
+              status: "applied",
+              attempt_count: 1,
+              last_attempt_at: new Date().toISOString(),
+              last_success_at: new Date().toISOString(),
+            },
+            { onConflict: "clover_customer_id,normalized_item_name" },
+          );
+        }
+      } catch {
+        // Non-blocking per item tag
+      }
+    }
+    return taggedCount;
+  } catch (err) {
+    console.warn(`[backfill] Failed to apply purchase tags for ${cloverCustomerId}:`, err);
+    return 0;
+  }
+}
+
 // ---- The canonical backfill --------------------------------------------
 
 /**
@@ -333,6 +395,8 @@ export async function backfillStrandedCustomers(
             phone,
             ghlContactId,
           });
+          // Also apply purchase tags for their purchases if any exist
+          await applyCustomerPurchaseTags(c.clover_customer_id, ghlContactId);
           continue;
         }
         // Multiple overlapping contacts → ambiguous.
@@ -363,6 +427,7 @@ export async function backfillStrandedCustomers(
           phone,
           ghlContactId,
         });
+        await applyCustomerPurchaseTags(c.clover_customer_id, ghlContactId);
         continue;
       }
 
@@ -381,6 +446,7 @@ export async function backfillStrandedCustomers(
           phone,
           ghlContactId,
         });
+        await applyCustomerPurchaseTags(c.clover_customer_id, ghlContactId);
         continue;
       }
 
@@ -426,6 +492,8 @@ export async function backfillStrandedCustomers(
           phone,
           ghlContactId: created.id,
         });
+        // Apply purchase tags for any items this customer purchased
+        await applyCustomerPurchaseTags(c.clover_customer_id, created.id);
       }
     } catch (e: any) {
       const status = e?.status ?? e?.statusCode ?? null;
