@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { getCustomerPurchasesListFn } from "@/lib/integration/integration.functions";
+import { getFilteredCustomerPurchasesFn } from "@/lib/integration/product-functions";
 import type { CustomerPurchaseRow } from "@/lib/integration/pos-data.server";
 
 function formatMoney(cents: number): string {
@@ -104,22 +104,28 @@ function ItemChips({ items }: { items: CustomerPurchaseRow["itemsPurchased"] }) 
 export function CustomerPurchasesPage() {
   const [search, setSearch] = useState("");
   const [productFilter, setProductFilter] = useState<string>("all");
+  const [dateRange, setDateRange] = useState<string>("all");
   const [page, setPage] = useState(0);
   const [rows, setRows] = useState<CustomerPurchaseRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchFn = useServerFn(getCustomerPurchasesListFn);
+  const fetchFn = useServerFn(getFilteredCustomerPurchasesFn);
   const LIMIT = 50;
 
   const load = useCallback(
-    async (q: string, p: number) => {
+    async (q: string, p: number, rangeVal: string) => {
       setLoading(true);
       setError(null);
       try {
         const res = await fetchFn({
-          data: { search: q || undefined, limit: LIMIT, offset: p * LIMIT },
+          data: {
+            search: q || undefined,
+            limit: LIMIT,
+            offset: p * LIMIT,
+            range: rangeVal,
+          },
         });
         if (res && "setupRequired" in res && res.setupRequired) {
           setError("Integration not configured. Please complete setup in Settings.");
@@ -139,19 +145,25 @@ export function CustomerPurchasesPage() {
 
   // Auto-load on mount
   useEffect(() => {
-    load("", 0);
+    load("", 0, "all");
   }, [load]);
 
   const handleSearch = (q: string) => {
     setSearch(q);
     setPage(0);
     setProductFilter("all");
-    load(q, 0);
+    load(q, 0, dateRange);
+  };
+
+  const handleDateRangeChange = (rangeVal: string) => {
+    setDateRange(rangeVal);
+    setPage(0);
+    load(search, 0, rangeVal);
   };
 
   const handlePage = (p: number) => {
     setPage(p);
-    load(search, p);
+    load(search, p, dateRange);
   };
 
   // Collect all unique product names for the filter dropdown
@@ -280,6 +292,37 @@ export function CustomerPurchasesPage() {
             </option>
           ))}
         </select>
+
+        {/* Date range filter dropdown aligned alongside All Products */}
+        <select
+          value={dateRange}
+          onChange={(e) => handleDateRangeChange(e.target.value)}
+          style={{
+            border: "1px solid #d1d5db",
+            borderRadius: 8,
+            padding: "8px 32px 8px 12px",
+            fontSize: 13,
+            color: dateRange === "all" ? "#6b7280" : "#111827",
+            background: "#fff",
+            cursor: "pointer",
+            fontWeight: dateRange === "all" ? 400 : 600,
+            minWidth: 150,
+            outline: "none",
+            appearance: "none",
+            backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
+            backgroundRepeat: "no-repeat",
+            backgroundPosition: "right 10px center",
+          }}
+        >
+          <option value="all">All Time</option>
+          <option value="today">Today</option>
+          <option value="week">This Week</option>
+          <option value="month">This Month</option>
+          <option value="last3days">Last 3 Days</option>
+          <option value="last7days">Last 7 Days</option>
+          <option value="last30days">Last 30 Days</option>
+        </select>
+
         {loading && <span style={{ fontSize: 12, color: "#6b7280" }}>Loading…</span>}
         {productFilter !== "all" && (
           <span style={{ fontSize: 12, color: "#6b7280" }}>

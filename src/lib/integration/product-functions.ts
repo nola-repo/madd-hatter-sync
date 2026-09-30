@@ -49,6 +49,34 @@ export const searchCustomerPurchasesByItemFn = createServerFn({ method: "POST" }
     }
   });
 
+export const getFilteredCustomerPurchasesFn = createServerFn({ method: "GET" })
+  .validator((data) =>
+    z
+      .object({
+        search: z.string().optional(),
+        limit: z.number().int().min(1).max(100).default(50),
+        offset: z.number().int().min(0).default(0),
+        range: z.string().optional(),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data }) => {
+    await requireAdmin();
+    try {
+      const { listFilteredCustomersWithPurchases } = await import("./customer-purchases.server");
+      const res = await listFilteredCustomersWithPurchases({
+        search: data.search,
+        limit: data.limit,
+        offset: data.offset,
+        range: !data.range || data.range === "all" ? undefined : (data.range as any),
+      });
+      return { setupRequired: false as const, ...res };
+    } catch (e) {
+      if (isSetupRequired(e)) return setupRequiredResponse(e);
+      throw e;
+    }
+  });
+
 export const getSyncLogsFn = createServerFn({ method: "GET" })
   .validator((data) =>
     z

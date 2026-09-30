@@ -610,7 +610,7 @@ export async function getReviewQueue(limit = 50): Promise<ReviewQueueItem[]> {
   const { data } = await sb
     .from("match_audit_log")
     .select("*")
-    .in("match_status", ["NEEDS_REVIEW", "AMBIGUOUS_MATCH", "CONFLICT", "NO_IDENTIFIERS"])
+    .in("match_status", ["NEEDS_REVIEW", "AMBIGUOUS_MATCH", "CONFLICT"])
     .eq("clover_merchant_id", cfg.clover.merchantId)
     .order("created_at", { ascending: false })
     .limit(limit * 3);
