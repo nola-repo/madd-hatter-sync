@@ -8,6 +8,7 @@ export type IntegrationConfig = {
     merchantId: string;
     apiKey: string;
     environment: "sandbox" | "production";
+    webhookSecret: string;
   };
   ghl: {
     apiBase: string;
@@ -75,6 +76,9 @@ export function getIntegrationConfig(): IntegrationConfig {
       merchantId: cloverMerchantId,
       apiKey: cloverApiKey,
       environment: cloverEnv,
+      // Optional HMAC secret configured in the Clover webhook dashboard.
+      // Read at call time inside the handler; never exposed to the client.
+      webhookSecret: (process.env.CLOVER_WEBHOOK_SECRET ?? "").trim(),
     },
     ghl: {
       // GHL REST API base (Lead Connector API v1).

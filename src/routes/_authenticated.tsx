@@ -2,7 +2,6 @@ import { createFileRoute, Outlet, redirect, useRouter } from "@tanstack/react-ro
 import { adminMe } from "@/lib/integration/auth.functions";
 import { AdminShell } from "@/components/admin-shell";
 import { SyncProvider } from "@/hooks/use-sync-context";
-import { useSilentAutoSync } from "@/hooks/use-silent-auto-sync";
 import { useEffect, useState } from "react";
 
 async function logoutRequest() {
@@ -135,7 +134,6 @@ function AuthLayout() {
 
   return (
     <SyncProvider>
-      <AutoSyncBridge />
       <AdminShell
         email={clientSession?.email ?? null}
         onLogout={async () => {
@@ -148,15 +146,4 @@ function AuthLayout() {
       </AdminShell>
     </SyncProvider>
   );
-}
-
-/**
- * Mounts the silent background auto-sync hook INSIDE the SyncProvider so it
- * runs once globally across all authenticated pages. The hook pulls the
- * latest Clover data + processes customer mappings/tags on mount and every
- * 10 minutes, then bumps the global sync version so every page refreshes.
- */
-function AutoSyncBridge() {
-  useSilentAutoSync();
-  return null;
 }
