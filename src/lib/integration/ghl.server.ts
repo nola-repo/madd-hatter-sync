@@ -568,6 +568,14 @@ export async function createPurchaseRecord(
     }
   }
 
+  // Fallback: If no schema fields matched, map standard properties directly to ensure properties is never empty
+  if (Object.keys(properties).length === 0) {
+    if (values["Purchase Reference"])
+      properties["purchase_reference"] = values["Purchase Reference"];
+    if (values["Item Name"]) properties["item_name"] = values["Item Name"];
+    if (values["Line Total"]) properties["line_total"] = values["Line Total"];
+  }
+
   const body = {
     locationId: cfg.ghl.locationId,
     properties,

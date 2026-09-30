@@ -157,44 +157,32 @@ export async function matchCloverCustomerToGhlContact(input: {
     };
   }
 
-  // No identifiers to search with — auto-create a GHL contact using
-  // whatever we have (name, Clover ID) so POS Purchase Items still sync.
+  // Instance A: Total Anonymity — No email, no phone, no name (or no identifiers at all).
+  // Immediately bypass GHL sync/review queue and route to catch-all / no-op.
   if (!email && !phone) {
     const contactName = input.customerName?.trim() ?? null;
+
+    // Instance D: Invalid Info — Name Only (Name present, but NO Email and NO Phone).
+    // Flag as NEEDS_REVIEW / name_only so it can be held back safely without cluttering review queue as an anonymous profile.
     if (contactName && contactName.length > 1) {
-      try {
-        const created = await createGhlContact({
-          firstName: contactName.split(" ")[0] ?? contactName,
-          lastName: contactName.split(" ").slice(1).join(" ") || "",
-          email: "",
-          phone: "",
-          note: `Auto-created from Clover POS. Clover Customer ID: ${input.cloverCustomerId ?? "unknown"}`,
-        });
-        return {
-          status: "AUTO_CREATED",
-          ghlContactId: created.id,
-          matchMethod: "auto_create",
-          evidence: buildEvidence(null, null, [], []),
-          reason: `No email/phone on Clover profile. Auto-created GHL contact for "${contactName}".`,
-          confident: true,
-        };
-      } catch (createErr: any) {
-        return {
-          status: "NO_IDENTIFIERS",
-          ghlContactId: null,
-          matchMethod: "none",
-          evidence: buildEvidence(null, null, [], []),
-          reason: `No email/phone. Auto-create failed: ${createErr?.message ?? "unknown error"}.`,
-          confident: false,
-        };
-      }
+      return {
+        status: "NEEDS_REVIEW",
+        ghlContactId: null,
+        matchMethod: "none",
+        evidence: buildEvidence(null, null, [], []),
+        reason: `Instance D (Name Only): Customer "${contactName}" has no email or phone. Held back from auto-creation to prevent unidentifiable profiles.`,
+        confident: false,
+      };
     }
+
+    // Instance A: Total Anonymity — No email, no phone, no name.
     return {
       status: "NO_IDENTIFIERS",
       ghlContactId: null,
       matchMethod: "none",
       evidence: buildEvidence(null, null, [], []),
-      reason: "Customer has no usable email, phone, or name — cannot match or create in GHL.",
+      reason:
+        "Instance A (Total Anonymity): Customer has no email, phone, or name. Bypassing CRM sync.",
       confident: false,
     };
   }
