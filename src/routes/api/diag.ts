@@ -44,6 +44,14 @@ export const Route = createFileRoute("/api/diag")({
           });
           const locText = await locRes.text();
 
+          const syncSecret = (process.env.SYNC_SECRET ?? "").trim();
+          const syncSecretDiag = {
+            configured: Boolean(syncSecret),
+            length: syncSecret.length,
+            prefix: syncSecret ? syncSecret.slice(0, 4) : "",
+            suffix: syncSecret ? syncSecret.slice(-4) : "",
+          };
+
           // 2. Test contacts list endpoint
           const contactsRes = await fetch(
             `${cfg.ghl.apiBase}/contacts/?locationId=${cfg.ghl.locationId}&limit=10`,
@@ -151,6 +159,7 @@ export const Route = createFileRoute("/api/diag")({
 
           return Response.json({
             success: true,
+            syncSecretDiag,
             configuredLocationId: cfg.ghl.locationId,
             locationCheck: {
               status: locRes.status,

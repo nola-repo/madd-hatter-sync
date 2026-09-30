@@ -311,7 +311,13 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
   // 7. Orders — full expansion: lineItems + discounts + modifiers, payments +
   //    refunds, refunds, discounts, customers, serviceCharge, employee.
   await safe("orders", async () => {
-    const orderPageOpts = { limit: 100, maxPages: 150, extraParams: "orderBy=createdTime+DESC" };
+    // For cron incremental runs, cap maxPages at 15 (up to 1,500 recent orders) to stay within the 30s ceiling
+    const maxOrderPages = kind === "incremental" ? 15 : 150;
+    const orderPageOpts = {
+      limit: 100,
+      maxPages: maxOrderPages,
+      extraParams: "orderBy=createdTime+DESC",
+    };
     let orders: any[] = [];
     let pages = 0;
     try {

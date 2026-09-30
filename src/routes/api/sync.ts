@@ -234,11 +234,13 @@ async function verifyCloverHmac(
   }
 }
 
-// ---- Step A: Pull Clover data into Supabase (fast) ----------------------
+// ---- Step A: Pull Clover data into Supabase (fast, bounded for cron) ----
 
 async function stepFetch() {
   console.log("[sync] stepFetch: pulling Clover data...");
-  const result = await refreshPosData();
+  // Limit to recent 7 days during periodic cron to ensure it completes
+  // well within the 30s cron-job.org timeout ceiling.
+  const result = await refreshPosData({ kind: "incremental", range: "week" });
   console.log(
     `[sync] stepFetch done: ${result.customersUpserted} customers, ${result.ordersUpserted} orders`,
   );
@@ -246,6 +248,7 @@ async function stepFetch() {
     customersUpserted: result.customersUpserted ?? 0,
     ordersUpserted: result.ordersUpserted ?? 0,
     itemsUpserted: result.orderItemsUpserted ?? 0,
+    errors: result.errors,
   };
 }
 
