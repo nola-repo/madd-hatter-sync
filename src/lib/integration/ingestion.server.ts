@@ -41,6 +41,57 @@ class CloverApiError extends Error {
   }
 }
 
+/**
+ * Rate-limit guard for CRM (GHL V2) upsert/record calls. The CRM enforces
+ * ~100 requests / 10 seconds per location. On HTTP 429, this wrapper backs
+ * off with exponential delay, logs the throttle to match_audit_log, then
+ * retries — instead of crashing the batch or dropping the contact.
+ *
+ * `label` is used only for logging context. Returns the wrapped result on
+ * success; throws the original error only after all retries are exhausted.
+ */
+async function logCrmThrottle(label: string, attempt: number, delayMs: number): Promise<void> {
+  try {
+    const cfg = getIntegrationConfig();
+    const sb = getSupabaseServer();
+    await sb.from("match_audit_log").insert({
+      clover_merchant_id: cfg.clover.merchantId,
+      clover_customer_id: `rate-limit:${label}`,
+      match_status: "GHL_RATE_LIMITED",
+      match_method: "none",
+      match_evidence: { label, attempt, delayMs },
+      error_code: "429",
+      error_message: `CRM rate limit hit during "${label}". Backing off ${delayMs}ms (attempt ${attempt}).`,
+    });
+  } catch {
+    // Logging must never break the pipeline.
+  }
+  console.warn(
+    `[crm-rate-limit] ${label} throttled (429) — backoff ${delayMs}ms, attempt ${attempt}`,
+  );
+}
+
+async function withCrmRateLimitGuard<T>(
+  label: string,
+  fn: () => Promise<T>,
+  maxRetries = 3,
+): Promise<T> {
+  let attempt = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    try {
+      return await fn();
+    } catch (e: any) {
+      const status = e?.status ?? e?.statusCode ?? null;
+      if (status !== 429 || attempt >= maxRetries) throw e;
+      const delayMs = Math.min(8000, 1000 * Math.pow(2, attempt)); // 1s, 2s, 4s...
+      await logCrmThrottle(label, attempt + 1, delayMs);
+      await new Promise((r) => setTimeout(r, delayMs));
+      attempt += 1;
+    }
+  }
+}
+
 async function cloverGet(path: string): Promise<any> {
   const cfg = getIntegrationConfig();
   const token = cfg.clover.apiKey.trim();
@@ -496,7 +547,7 @@ export type CrmSyncSummary = {
   errors: string[];
 };
 
-export async function runCrmSync(limit = 25): Promise<CrmSyncSummary> {
+export async function runCrmSync(limit?: number): Promise<CrmSyncSummary> {
   const sb = getSupabaseServer();
   const errors: string[] = [];
   const out: CrmSyncSummary = {
@@ -511,6 +562,12 @@ export async function runCrmSync(limit = 25): Promise<CrmSyncSummary> {
     errors,
   };
 
+  // Dynamic batch limit: prefer the explicit arg, then SYNC_BATCH_LIMIT env,
+  // then default 10. Caps at 100 to stay within cron-job.org's 30s window.
+  const resolvedLimit =
+    limit ?? (process.env.SYNC_BATCH_LIMIT ? parseInt(process.env.SYNC_BATCH_LIMIT, 10) : 10);
+  const batchLimit = Math.min(100, Math.max(1, resolvedLimit));
+
   // 1. Pre-fetch schema once for the entire batch.
   let cachedSchema: { schema: any; schemaVal: any } | undefined;
   try {
@@ -524,7 +581,8 @@ export async function runCrmSync(limit = 25): Promise<CrmSyncSummary> {
   // 2. Sync eligible paid orders to the CRM (purchase records + associations).
   // Time-boxed loop: abort if we approach 22s so cron-job.org never sees a 30s timeout.
   const startTime = Date.now();
-  const maxElapsedMs = 20_000;
+  const maxElapsedMs = 22_000;
+  let pausedAtCursor: string | null = null;
 
   const { data: eligible, error: eErr } = await sb
     .from("orders")
@@ -532,22 +590,29 @@ export async function runCrmSync(limit = 25): Promise<CrmSyncSummary> {
     .eq("payment_status", "PAID")
     .in("status", ["pending", "error", "held_for_review"])
     .order("created_time", { ascending: false })
-    .limit(limit);
+    .limit(batchLimit);
   if (eErr) {
     errors.push(`fetch eligible for sync: ${eErr.message}`);
     return out;
   }
 
   for (const o of eligible ?? []) {
-    // Check if we're running low on time
+    // Check if we're running low on time.
     if (Date.now() - startTime > maxElapsedMs) {
-      console.log(`[sync] time ceiling reached (${Date.now() - startTime}ms), pausing batch.`);
+      console.log(
+        `[sync] time ceiling reached (${Date.now() - startTime}ms), pausing batch at cursor ${o.clover_order_id}.`,
+      );
+      pausedAtCursor = o.clover_order_id;
       break;
     }
 
     try {
       out.ordersProcessed += 1;
-      const result = await syncOrderToGhl(o.clover_order_id, cachedSchema);
+      // Rate-limit guard: CRM enforces ~100 req/10s. On 429, back off with
+      // exponential delay and continue rather than crashing the batch.
+      const result = await withCrmRateLimitGuard(`order-sync ${o.clover_order_id}`, () =>
+        syncOrderToGhl(o.clover_order_id, cachedSchema),
+      );
 
       if (result.outcome === "synced" || result.outcome === "partial") {
         out.ordersSynced += 1;
@@ -560,6 +625,7 @@ export async function runCrmSync(limit = 25): Promise<CrmSyncSummary> {
         errors.push(`crm-sync ${o.clover_order_id}: ${result.error ?? result.message}`);
       }
     } catch (e: any) {
+      // Rate-limit / transient failures are failure-isolated, not fatal.
       out.ordersErrors += 1;
       errors.push(`crm-sync ${o.clover_order_id}: ${e?.message ?? String(e)}`);
     }
@@ -567,12 +633,17 @@ export async function runCrmSync(limit = 25): Promise<CrmSyncSummary> {
 
   // 3. Run customer purchase mapping & tag pipeline for a small batch.
   try {
-    const ops = await processPendingPurchases(limit);
+    const ops = await processPendingPurchases(batchLimit);
     out.tagsApplied = ops.tagsApplied ?? 0;
     out.tagsVerified = ops.tagsVerified ?? 0;
     out.ordersErrors += ops.errors ?? 0;
   } catch (e: any) {
     errors.push(`purchase-mapping: ${e?.message ?? String(e)}`);
+  }
+
+  if (pausedAtCursor) {
+    (out as CrmSyncSummary & { pausedAtCursor?: string | null }).pausedAtCursor = pausedAtCursor;
+    (out as CrmSyncSummary & { batchLimit?: number }).batchLimit = batchLimit;
   }
 
   return out;

@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { refreshPosData, runCrmSync } from "@/lib/integration/ingestion.server";
 import { syncOrderToGhl } from "@/lib/integration/sync.server";
 import { processPendingPurchases } from "@/lib/integration/purchase-ops.server";
+import { backfillStrandedCustomers } from "@/lib/integration/customer-backfill.server";
 import { getIntegrationConfig } from "@/lib/integration/config.server";
 import { getSupabaseServer } from "@/lib/integration/supabase.server";
 
@@ -57,9 +58,13 @@ export const Route = createFileRoute("/api/sync")({
           return Response.json({ error: "Unauthorized" }, { status: 401 });
         }
 
+        // Dynamic batch limit: env SYNC_BATCH_LIMIT (up to 100) for backfill ramp-up.
+        const envBatch = process.env.SYNC_BATCH_LIMIT
+          ? parseInt(process.env.SYNC_BATCH_LIMIT, 10)
+          : 10;
         const batchLimit = Math.min(
-          50,
-          Math.max(1, parseInt(url.searchParams.get("limit") ?? "10", 10) || 10),
+          100,
+          Math.max(1, parseInt(url.searchParams.get("limit") ?? String(envBatch), 10) || envBatch),
         );
         const rangeParam = (url.searchParams.get("range") ?? "today").toLowerCase() as
           "today" | "week" | "month";
@@ -75,6 +80,13 @@ export const Route = createFileRoute("/api/sync")({
             // Step B: sync bounded batch of orders to CRM
             const result = await stepPush(batchLimit);
             return Response.json({ ok: true, step: "push", limit: batchLimit, ...result });
+          }
+
+          if (step === "backfill") {
+            // Step C: customer-first backfill for stranded profiles with
+            // valid identifiers but no order-driven mapping yet.
+            const result = await stepBackfill(batchLimit);
+            return Response.json({ ok: true, step: "backfill", limit: batchLimit, ...result });
           }
 
           // No step specified: run small fetch + small push
@@ -278,6 +290,31 @@ async function stepPush(limit = 25) {
     purchaseRecordsCreated: result.purchaseRecordsCreated,
     tagsApplied: result.tagsApplied,
     tagsVerified: result.tagsVerified,
+    errors: result.errors.length,
+  };
+}
+
+// ---- Step C: Customer-first backfill (stranded profiles) ----------------
+
+async function stepBackfill(limit = 25) {
+  console.log(`[sync] stepBackfill: resolving up to ${limit} stranded customers...`);
+  const result = await backfillStrandedCustomers(limit, 22_000);
+  console.log(
+    `[sync] stepBackfill done: attempted=${result.attempted} matched=${result.matchedExisting} created=${result.autoCreated} conflicts=${result.conflicts} remaining=${result.remaining}` +
+      (result.pausedAtCursor ? ` pausedAt=${result.pausedAtCursor}` : ""),
+  );
+  return {
+    scanned: result.scanned,
+    attempted: result.attempted,
+    matchedExisting: result.matchedExisting,
+    autoCreated: result.autoCreated,
+    conflicts: result.conflicts,
+    needsReview: result.needsReview,
+    failed: result.failed,
+    persistedMappings: result.persistedMappings,
+    rateLimited: result.rateLimited,
+    remaining: result.remaining,
+    pausedAtCursor: result.pausedAtCursor,
     errors: result.errors.length,
   };
 }

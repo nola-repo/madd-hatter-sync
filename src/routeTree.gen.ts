@@ -35,6 +35,7 @@ import { Route as AuthenticatedAdminTransactionsRouteImport } from './routes/_au
 import { Route as ApiAuthLoginRouteImport } from './routes/api/auth/login'
 import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
 import { Route as ApiAuthMeRouteImport } from './routes/api/auth/me'
+import { Route as ApiSyncHistoricalCustomersRouteImport } from './routes/api/sync/historical-customers'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -178,13 +179,19 @@ const ApiAuthMeRoute = ApiAuthMeRouteImport.update({
   path: '/api/auth/me',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSyncHistoricalCustomersRoute =
+  ApiSyncHistoricalCustomersRouteImport.update({
+    id: '/historical-customers',
+    path: '/historical-customers',
+    getParentRoute: () => ApiSyncRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/api/diag': typeof ApiDiagRoute
-  '/api/sync': typeof ApiSyncRoute
+  '/api/sync': typeof ApiSyncRouteWithChildren
   '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/admin/categories': typeof AuthenticatedAdminCategoriesRoute
   '/admin/customer-purchases': typeof AuthenticatedAdminCustomerPurchasesRoute
@@ -204,13 +211,14 @@ export interface FileRoutesByFullPath {
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/me': typeof ApiAuthMeRoute
+  '/api/sync/historical-customers': typeof ApiSyncHistoricalCustomersRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/api/diag': typeof ApiDiagRoute
-  '/api/sync': typeof ApiSyncRoute
+  '/api/sync': typeof ApiSyncRouteWithChildren
   '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/admin/categories': typeof AuthenticatedAdminCategoriesRoute
   '/admin/customer-purchases': typeof AuthenticatedAdminCustomerPurchasesRoute
@@ -230,6 +238,7 @@ export interface FileRoutesByTo {
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/me': typeof ApiAuthMeRoute
+  '/api/sync/historical-customers': typeof ApiSyncHistoricalCustomersRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
 }
 export interface FileRoutesById {
@@ -239,7 +248,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/api/diag': typeof ApiDiagRoute
-  '/api/sync': typeof ApiSyncRoute
+  '/api/sync': typeof ApiSyncRouteWithChildren
   '/_authenticated/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/_authenticated/admin/categories': typeof AuthenticatedAdminCategoriesRoute
   '/_authenticated/admin/customer-purchases': typeof AuthenticatedAdminCustomerPurchasesRoute
@@ -259,6 +268,7 @@ export interface FileRoutesById {
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/me': typeof ApiAuthMeRoute
+  '/api/sync/historical-customers': typeof ApiSyncHistoricalCustomersRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
 }
 export interface FileRouteTypes {
@@ -288,6 +298,7 @@ export interface FileRouteTypes {
     | '/api/auth/login'
     | '/api/auth/logout'
     | '/api/auth/me'
+    | '/api/sync/historical-customers'
     | '/admin/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -314,6 +325,7 @@ export interface FileRouteTypes {
     | '/api/auth/login'
     | '/api/auth/logout'
     | '/api/auth/me'
+    | '/api/sync/historical-customers'
     | '/admin'
   id:
     | '__root__'
@@ -342,6 +354,7 @@ export interface FileRouteTypes {
     | '/api/auth/login'
     | '/api/auth/logout'
     | '/api/auth/me'
+    | '/api/sync/historical-customers'
     | '/_authenticated/admin/'
   fileRoutesById: FileRoutesById
 }
@@ -350,7 +363,7 @@ export interface RootRouteChildren {
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   LoginRoute: typeof LoginRoute
   ApiDiagRoute: typeof ApiDiagRoute
-  ApiSyncRoute: typeof ApiSyncRoute
+  ApiSyncRoute: typeof ApiSyncRouteWithChildren
   ApiAuthLoginRoute: typeof ApiAuthLoginRoute
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
   ApiAuthMeRoute: typeof ApiAuthMeRoute
@@ -540,6 +553,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthMeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/sync/historical-customers': {
+      id: '/api/sync/historical-customers'
+      path: '/historical-customers'
+      fullPath: '/api/sync/historical-customers'
+      preLoaderRoute: typeof ApiSyncHistoricalCustomersRouteImport
+      parentRoute: typeof ApiSyncRoute
+    }
   }
 }
 
@@ -600,12 +620,23 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
   AuthenticatedRouteChildren,
 )
 
+interface ApiSyncRouteChildren {
+  ApiSyncHistoricalCustomersRoute: typeof ApiSyncHistoricalCustomersRoute
+}
+
+const ApiSyncRouteChildren: ApiSyncRouteChildren = {
+  ApiSyncHistoricalCustomersRoute: ApiSyncHistoricalCustomersRoute,
+}
+
+const ApiSyncRouteWithChildren =
+  ApiSyncRoute._addFileChildren(ApiSyncRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   LoginRoute: LoginRoute,
   ApiDiagRoute: ApiDiagRoute,
-  ApiSyncRoute: ApiSyncRoute,
+  ApiSyncRoute: ApiSyncRouteWithChildren,
   ApiAuthLoginRoute: ApiAuthLoginRoute,
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,
   ApiAuthMeRoute: ApiAuthMeRoute,
