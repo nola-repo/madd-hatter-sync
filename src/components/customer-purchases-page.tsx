@@ -16,41 +16,34 @@ function formatDate(ms: number): string {
   });
 }
 
-function MatchBadge({ status, matchMethod }: { status: string; matchMethod?: string | null }) {
+function MatchBadge({ status }: { status: string }) {
   const map: Record<string, { color: string; bg: string; label: string }> = {
     MATCHED: { color: "#16a34a", bg: "#dcfce7", label: "CRM Matched" },
     AUTO_CREATED: { color: "#0891b2", bg: "#cffafe", label: "Auto Created" },
     NO_GHL_MATCH: { color: "#d97706", bg: "#fef9c3", label: "No CRM Match" },
     NO_IDENTIFIERS: { color: "#dc2626", bg: "#fee2e2", label: "No Contact Info" },
   };
-  const c = map[status] ?? { color: "#dc2626", bg: "#fee2e2", label: "No Contact Info" };
+  const c = map[status] ?? { color: "#6b7280", bg: "#f3f4f6", label: status };
   return (
-    <div>
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        background: c.bg,
+        color: c.color,
+        borderRadius: 20,
+        padding: "2px 10px",
+        fontSize: 11,
+        fontWeight: 600,
+        whiteSpace: "nowrap",
+      }}
+    >
       <span
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 5,
-          background: c.bg,
-          color: c.color,
-          borderRadius: 20,
-          padding: "2px 10px",
-          fontSize: 11,
-          fontWeight: 600,
-          whiteSpace: "nowrap",
-        }}
-      >
-        <span
-          style={{ width: 6, height: 6, borderRadius: "50%", background: c.color, flexShrink: 0 }}
-        />
-        {c.label}
-      </span>
-      {matchMethod && (
-        <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 3 }}>
-          via {matchMethod.replace("_", " ")}
-        </div>
-      )}
-    </div>
+        style={{ width: 6, height: 6, borderRadius: "50%", background: c.color, flexShrink: 0 }}
+      />
+      {c.label}
+    </span>
   );
 }
 
@@ -116,8 +109,6 @@ export function CustomerPurchasesPage() {
   const [rows, setRows] = useState<CustomerPurchaseRow[]>([]);
   const [total, setTotal] = useState(0);
   const [crmLinkedCount, setCrmLinkedCount] = useState(0);
-  const [noCrmMatchCount, setNoCrmMatchCount] = useState(0);
-  const [overallSpendCents, setOverallSpendCents] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -141,23 +132,11 @@ export function CustomerPurchasesPage() {
           setError("Integration not configured. Please complete setup in Settings.");
           return;
         }
-        const r = res as {
-          rows: CustomerPurchaseRow[];
-          total: number;
-          crmLinkedTotal?: number;
-          noCrmMatchTotal?: number;
-          overallSpendCents?: number;
-        };
+        const r = res as { rows: CustomerPurchaseRow[]; total: number; crmLinkedTotal?: number };
         setRows(r.rows ?? []);
         setTotal(r.total ?? 0);
         if (typeof r.crmLinkedTotal === "number") {
           setCrmLinkedCount(r.crmLinkedTotal);
-        }
-        if (typeof r.noCrmMatchTotal === "number") {
-          setNoCrmMatchCount(r.noCrmMatchTotal);
-        }
-        if (typeof r.overallSpendCents === "number") {
-          setOverallSpendCents(r.overallSpendCents);
         }
       } catch (e: any) {
         setError(e?.message ?? "Failed to load customer purchases.");
@@ -226,27 +205,23 @@ export function CustomerPurchasesPage() {
       {/* Stats */}
       <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
         {[
-          { label: "TOTAL CUSTOMERS", value: total, color: "#111827" },
-          { label: "CRM LINKED", value: crmLinkedCount, color: "#16a34a" },
+          { label: "Total Customers", value: total, color: "#111827" },
+          { label: "CRM Linked", value: crmLinkedCount, color: "#16a34a" },
           {
-            label: "NO CRM MATCH",
-            value: noCrmMatchCount > 0 ? noCrmMatchCount : Math.max(0, total - crmLinkedCount),
+            label: "Unmatched / Unlinked",
+            value: Math.max(0, total - crmLinkedCount),
             color: "#d97706",
           },
-          {
-            label: "TOTAL SPEND",
-            value: formatMoney(overallSpendCents > 0 ? overallSpendCents : totalSpend),
-            color: "#7c3aed",
-          },
+          { label: "Page Spend", value: formatMoney(totalSpend), color: "#7c3aed" },
         ].map((s) => (
           <div
             key={s.label}
             style={{
-              flex: "1 1 180px",
+              flex: "1 1 140px",
               background: "#fff",
               border: "1px solid #e5e7eb",
               borderRadius: 10,
-              padding: "16px 20px",
+              padding: "14px 18px",
               boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
             }}
           >
@@ -262,7 +237,7 @@ export function CustomerPurchasesPage() {
             >
               {s.label}
             </div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: s.color }}>{s.value}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
           </div>
         ))}
       </div>
@@ -513,7 +488,12 @@ export function CustomerPurchasesPage() {
                       <ItemChips items={row.itemsPurchased} />
                     </td>
                     <td style={{ padding: "12px 16px", verticalAlign: "top" }}>
-                      <MatchBadge status={row.matchStatus} matchMethod={row.matchMethod} />
+                      <MatchBadge status={row.matchStatus} />
+                      {row.matchMethod && (
+                        <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 3 }}>
+                          via {row.matchMethod.replace("_", " ")}
+                        </div>
+                      )}
                     </td>
                     <td style={{ padding: "12px 16px", verticalAlign: "top", textAlign: "right" }}>
                       <div style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>

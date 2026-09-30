@@ -7,30 +7,18 @@ export async function listFilteredCustomersWithPurchases(opts: {
   limit?: number;
   offset?: number;
   range?: RangeLabel;
-}): Promise<{
-  rows: CustomerPurchaseRow[];
-  total: number;
-  crmLinkedTotal: number;
-  noCrmMatchTotal: number;
-  overallSpendCents: number;
-}> {
+}): Promise<{ rows: CustomerPurchaseRow[]; total: number; crmLinkedTotal: number }> {
   const sb = getSupabaseServer();
   const limit = opts.limit ?? 50;
   const offset = opts.offset ?? 0;
 
-  // Step 0: Get the true global stats
-  const [{ count: globalCrmLinked }, { count: globalNoCrmMatch }] = await Promise.all([
-    sb
-      .from("customer_mappings")
-      .select("*", { count: "exact", head: true })
-      .not("ghl_contact_id", "is", null),
-    sb
-      .from("customers")
-      .select("*", { count: "exact", head: true })
-      .or("email.is.null,email.eq.'',phone.is.null,phone.eq.''"),
-  ]);
+  // Step 0: Get the true global CRM Linked count across all customers
+  const { count: globalCrmLinked } = await sb
+    .from("customer_mappings")
+    .select("*", { count: "exact", head: true })
+    .not("ghl_contact_id", "is", null);
 
-  // Step 1: Query customers
+  // Step 1: Base customer query (sort so customers with purchases & identified profiles come first)
   let custQuery = sb
     .from("customers")
     .select("clover_customer_id, first_name, last_name, email, phone", { count: "exact" });
@@ -42,28 +30,21 @@ export async function listFilteredCustomersWithPurchases(opts: {
     );
   }
 
-  // Notice: no forced .order("created_at") which causes failure if table lacks created_at
   const {
     data: customers,
     count: totalCount,
     error: custErr,
-  } = await custQuery.range(offset, offset + limit - 1);
+  } = await custQuery.order("created_at", { ascending: false }).range(offset, offset + limit - 1);
 
   if (custErr) {
     console.error("[CustomerPurchases] Error querying customers table:", custErr);
   }
 
   if (!customers || customers.length === 0) {
-    return {
-      rows: [],
-      total: totalCount ?? 0,
-      crmLinkedTotal: globalCrmLinked ?? 0,
-      noCrmMatchTotal: globalNoCrmMatch ?? 0,
-      overallSpendCents: 0,
-    };
+    return { rows: [], total: totalCount ?? 0, crmLinkedTotal: globalCrmLinked ?? 0 };
   }
 
-  let customerIds = customers.map((c: any) => c.clover_customer_id).filter(Boolean);
+  let customerIds = customers.map((c: any) => c.clover_customer_id);
 
   // Step 2: Date-range filtering on orders
   let orderQuery = sb
@@ -92,8 +73,7 @@ export async function listFilteredCustomersWithPurchases(opts: {
     };
     existing.totalSpend += o.net_sales_cents ?? o.total_cents ?? 0;
     existing.count += 1;
-    if (o.id) existing.orderIds.push(o.id);
-    if (o.clover_order_id) existing.orderIds.push(o.clover_order_id);
+    existing.orderIds.push(o.id);
     if ((o.created_time ?? 0) > existing.lastVisit) {
       existing.lastVisit = o.created_time;
     }
@@ -124,19 +104,14 @@ export async function listFilteredCustomersWithPurchases(opts: {
       }
     }
 
-    const uniqueOrderIds = Array.from(new Set(relevantOrderIds)).slice(0, 500);
-
-    // Support both order_id (FK to orders.id) and clover_order_id
     const { data: items } = await sb
       .from("order_items")
-      .select("order_id, clover_order_id, item_name, name, quantity")
-      .or(
-        `order_id.in.(${uniqueOrderIds.join(",")}),clover_order_id.in.(${uniqueOrderIds.join(",")})`,
-      );
+      .select("order_id, item_name, quantity")
+      .in("order_id", relevantOrderIds.slice(0, 500));
 
-    for (const it of (items as any[]) ?? []) {
-      const cid = orderOwnerMap.get(it.order_id) || orderOwnerMap.get(it.clover_order_id);
-      const name = it.item_name || it.name;
+    for (const it of items ?? []) {
+      const cid = orderOwnerMap.get(it.order_id);
+      const name = it.item_name;
       if (!cid || !name) continue;
       if (!custItemsMap.has(cid)) custItemsMap.set(cid, new Map());
       const imap = custItemsMap.get(cid)!;
@@ -157,11 +132,8 @@ export async function listFilteredCustomersWithPurchases(opts: {
     const spend = custSpendMap.get(cid) ?? { totalSpend: 0, count: 0, lastVisit: 0, orderIds: [] };
     const mapping = mapByCid.get(cid);
 
-    const rawFullName = [c.first_name, c.last_name].filter(Boolean).join(" ");
-    let name = rawFullName;
-    if (!name || name.trim() === "") {
-      name = c.email || c.phone ? "Clover Customer" : "Unknown";
-    }
+    const fullName = [c.first_name, c.last_name].filter(Boolean).join(" ");
+    const name = fullName || "Unknown";
 
     let matchStatus: CustomerPurchaseRow["matchStatus"] = "NO_IDENTIFIERS";
     let matchMethod: string | null = null;
@@ -193,13 +165,5 @@ export async function listFilteredCustomersWithPurchases(opts: {
     };
   });
 
-  const overallSpend = rows.reduce((s, r) => s + r.totalSpendCents, 0);
-
-  return {
-    rows,
-    total: totalCount ?? rows.length,
-    crmLinkedTotal: globalCrmLinked ?? 0,
-    noCrmMatchTotal: globalNoCrmMatch ?? 0,
-    overallSpendCents: overallSpend,
-  };
+  return { rows, total: totalCount ?? rows.length, crmLinkedTotal: globalCrmLinked ?? 0 };
 }
