@@ -339,13 +339,6 @@ async function runSync(
         );
         if (existingLocal) recordId = existingLocal.ghl_record_id;
         if (!recordId) {
-          try {
-            recordId = await findRecordByPurchaseReference(schema.id, purchaseRefKey, ref);
-          } catch {
-            recordId = null;
-          }
-        }
-        if (!recordId) {
           const values: Record<string, string> = {
             "Purchase Reference": ref,
             "Item Name": li.name,
@@ -461,30 +454,16 @@ async function runSync(
   for (const li of order.lineItems) {
     const ref = purchaseReference(order.merchantId, order.id, li.id);
 
-    // Reconcile: if a record already exists (from a prior timed-out attempt),
-    // reuse it instead of creating a duplicate.
-    //
-    // Check order: local Supabase DB first (fast, 1 query) — if found, skip
-    // the expensive GHL full-scan entirely. Only fall back to the GHL search
-    // when the local DB has no record (e.g. first-ever sync or DB was wiped).
+    // Reconcile: check our local DB first for existing record ID (fast, 1 query)
     let recordId: string | null = null;
-
-    // Step A: check our own DB for a previously-saved record id.
     const existingItems = await getOrderItems(orderRowId);
     const existingLocal = existingItems.find(
       (i) => i.purchase_reference === ref && i.ghl_record_id,
     );
     if (existingLocal) recordId = existingLocal.ghl_record_id;
 
-    // Step B: if not found locally, scan GHL to recover from a timed-out attempt.
-    if (!recordId) {
-      try {
-        recordId = await findRecordByPurchaseReference(schema.id, purchaseRefKey, ref);
-      } catch {
-        // Search may not be supported; fall through to create.
-        recordId = null;
-      }
-    }
+    // Do NOT perform expensive multi-page GHL scans per line-item inside cron.
+    // If not in local DB, create a new record directly with deterministic reference.
 
     if (!recordId) {
       const values: Record<string, string> = {

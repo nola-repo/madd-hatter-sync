@@ -522,6 +522,10 @@ export async function runCrmSync(limit = 25): Promise<CrmSyncSummary> {
   }
 
   // 2. Sync eligible paid orders to the CRM (purchase records + associations).
+  // Time-boxed loop: abort if we approach 22s so cron-job.org never sees a 30s timeout.
+  const startTime = Date.now();
+  const maxElapsedMs = 20_000;
+
   const { data: eligible, error: eErr } = await sb
     .from("orders")
     .select("clover_order_id")
@@ -535,6 +539,12 @@ export async function runCrmSync(limit = 25): Promise<CrmSyncSummary> {
   }
 
   for (const o of eligible ?? []) {
+    // Check if we're running low on time
+    if (Date.now() - startTime > maxElapsedMs) {
+      console.log(`[sync] time ceiling reached (${Date.now() - startTime}ms), pausing batch.`);
+      break;
+    }
+
     try {
       out.ordersProcessed += 1;
       const result = await syncOrderToGhl(o.clover_order_id, cachedSchema);

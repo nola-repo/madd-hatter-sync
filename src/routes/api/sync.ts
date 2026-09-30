@@ -58,8 +58,8 @@ export const Route = createFileRoute("/api/sync")({
         }
 
         const batchLimit = Math.min(
-          100,
-          Math.max(1, parseInt(url.searchParams.get("limit") ?? "25", 10) || 25),
+          50,
+          Math.max(1, parseInt(url.searchParams.get("limit") ?? "10", 10) || 10),
         );
         const rangeParam = (url.searchParams.get("range") ?? "today").toLowerCase() as
           "today" | "week" | "month";
