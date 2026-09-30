@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { refreshPosData } from "@/lib/integration/ingestion.server";
+import { refreshPosData, runCrmSync } from "@/lib/integration/ingestion.server";
 import { syncOrderToGhl } from "@/lib/integration/sync.server";
 import { processPendingPurchases } from "@/lib/integration/purchase-ops.server";
 import { getIntegrationConfig } from "@/lib/integration/config.server";
@@ -252,18 +252,22 @@ async function stepFetch() {
 // ---- Step B: Push pending orders to GHL (small batch, fast) -------------
 
 async function stepPush(limit = 25) {
-  console.log(`[sync] stepPush: processing up to ${limit} customers...`);
-  const ops = await processPendingPurchases(limit);
+  console.log(`[sync] stepPush: syncing up to ${limit} orders to CRM...`);
+  const result = await runCrmSync(limit);
   console.log(
-    `[sync] stepPush done: ${ops.processed} processed, ${ops.matched} matched, ` +
-      `${ops.tagsApplied} tags applied.`,
+    `[sync] stepPush done: ${result.ordersSynced} synced, ${result.ordersHeld} held, ` +
+      `${result.tagsApplied} tags applied, ${result.purchaseRecordsCreated} purchase records.`,
   );
   return {
-    processed: ops.processed ?? 0,
-    matched: ops.matched ?? 0,
-    tagsApplied: ops.tagsApplied ?? 0,
-    tagsVerified: ops.tagsVerified ?? 0,
-    errors: ops.errors ?? 0,
+    ordersProcessed: result.ordersProcessed,
+    ordersSynced: result.ordersSynced,
+    ordersHeld: result.ordersHeld,
+    ordersErrors: result.ordersErrors,
+    contactsResolved: result.contactsResolved,
+    purchaseRecordsCreated: result.purchaseRecordsCreated,
+    tagsApplied: result.tagsApplied,
+    tagsVerified: result.tagsVerified,
+    errors: result.errors.length,
   };
 }
 

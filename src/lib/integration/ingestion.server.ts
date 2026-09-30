@@ -439,59 +439,13 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
     }
   });
 
-  // 10. Auto-sync eligible paid orders to the CRM (purchase records + tags).
-  // Fetch the GHL schema ONCE per run and pass it as a cached value to every
-  // syncOrderToGhl call — avoids probing 5 GHL endpoints per order (RC-7 fix).
-  await safe("crm-sync", async () => {
-    const sb = getSupabaseServer();
-
-    // Pre-fetch schema once for the entire batch.
-    let cachedSchema: { schema: any; schemaVal: any } | undefined;
-    try {
-      const { schema } = await findPurchaseObjectSchema();
-      const schemaVal = validatePurchaseSchema(schema);
-      cachedSchema = { schema, schemaVal };
-    } catch {
-      // Schema fetch failed — individual orders will fetch on their own.
-    }
-
-    const { data: eligible, error: eErr } = await sb
-      .from("orders")
-      .select("clover_order_id")
-      .eq("payment_status", "PAID")
-      .in("status", ["pending", "error", "held_for_review"])
-      .order("created_time", { ascending: false })
-      .limit(250);
-    if (eErr) throw new Error(`fetch eligible for sync: ${eErr.message}`);
-    for (const o of eligible ?? []) {
-      try {
-        const result = await syncOrderToGhl(o.clover_order_id, cachedSchema);
-
-        if (result.outcome === "synced" || result.outcome === "partial") {
-          counters.crmOrdersSynced += 1;
-          counters.crmPurchaseRecordsCreated += result.itemsSynced;
-          // A confident match resolved an existing GHL contact (we never create).
-          if (result.ghlContactId) counters.crmContactsCreated += 1;
-        } else if (result.outcome === "held_for_review") {
-          counters.crmOrdersHeld += 1;
-        } else if (result.outcome === "error") {
-          counters.crmOrdersErrors += 1;
-          errors.push(`crm-sync ${o.clover_order_id}: ${result.error ?? result.message}`);
-        }
-      } catch (e: any) {
-        counters.crmOrdersErrors += 1;
-        errors.push(`crm-sync ${o.clover_order_id}: ${e?.message ?? String(e)}`);
-      }
-    }
-  });
-
-  // 11. Run customer purchase mapping & tag pipeline for all customers with purchases.
-  await safe("customer-purchase-mapping", async () => {
-    await processPendingPurchases(300);
-  });
-
   const status: "completed" | "failed" =
     errors.length > 0 && counters.ordersUpserted === 0 ? "failed" : "completed";
+
+  // NOTE: CRM sync (purchase records + tags) is intentionally NOT run inside
+  // refreshPosData. It is split into runCrmSync() below so the cron pipeline
+  // can run fetch (Clover → Supabase) and push (Supabase → CRM) as separate
+  // 30-second-budget requests.
 
   await finishSyncRun(runId, { status, ...counters, errors: JSON.stringify(errors) });
 
@@ -508,6 +462,103 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
     finishedAt: new Date().toISOString(),
     reconciliation: recon,
   };
+}
+
+// ---- Standalone CRM sync (Supabase → GHL) ------------------------------
+// Split out of refreshPosData so the cron pipeline can run Clover ingestion
+// (step=fetch) and CRM push (step=push) as separate requests, each within
+// the 30-second cron-job.org timeout budget.
+//
+//   1. Pre-fetch the GHL custom object schema ONCE (avoids 5 probes/order).
+//   2. Sync eligible PAID orders (purchase records + associations).
+//   3. Run customer purchase mapping & tag pipeline.
+//
+// `limit` caps the number of orders processed per call so a single cron tick
+// stays well under 30s. cron-job.org calls this every 15 minutes, so the
+// backlog drains progressively across ticks.
+
+export type CrmSyncSummary = {
+  ordersProcessed: number;
+  ordersSynced: number;
+  ordersHeld: number;
+  ordersErrors: number;
+  contactsResolved: number;
+  purchaseRecordsCreated: number;
+  tagsApplied: number;
+  tagsVerified: number;
+  errors: string[];
+};
+
+export async function runCrmSync(limit = 25): Promise<CrmSyncSummary> {
+  const sb = getSupabaseServer();
+  const errors: string[] = [];
+  const out: CrmSyncSummary = {
+    ordersProcessed: 0,
+    ordersSynced: 0,
+    ordersHeld: 0,
+    ordersErrors: 0,
+    contactsResolved: 0,
+    purchaseRecordsCreated: 0,
+    tagsApplied: 0,
+    tagsVerified: 0,
+    errors,
+  };
+
+  // 1. Pre-fetch schema once for the entire batch.
+  let cachedSchema: { schema: any; schemaVal: any } | undefined;
+  try {
+    const { schema } = await findPurchaseObjectSchema();
+    const schemaVal = validatePurchaseSchema(schema);
+    cachedSchema = { schema, schemaVal };
+  } catch (e: any) {
+    errors.push(`schema-discovery: ${e?.message ?? String(e)}`);
+  }
+
+  // 2. Sync eligible paid orders to the CRM (purchase records + associations).
+  const { data: eligible, error: eErr } = await sb
+    .from("orders")
+    .select("clover_order_id")
+    .eq("payment_status", "PAID")
+    .in("status", ["pending", "error", "held_for_review"])
+    .order("created_time", { ascending: false })
+    .limit(limit);
+  if (eErr) {
+    errors.push(`fetch eligible for sync: ${eErr.message}`);
+    return out;
+  }
+
+  for (const o of eligible ?? []) {
+    try {
+      out.ordersProcessed += 1;
+      const result = await syncOrderToGhl(o.clover_order_id, cachedSchema);
+
+      if (result.outcome === "synced" || result.outcome === "partial") {
+        out.ordersSynced += 1;
+        out.purchaseRecordsCreated += result.itemsSynced;
+        if (result.ghlContactId) out.contactsResolved += 1;
+      } else if (result.outcome === "held_for_review") {
+        out.ordersHeld += 1;
+      } else if (result.outcome === "error") {
+        out.ordersErrors += 1;
+        errors.push(`crm-sync ${o.clover_order_id}: ${result.error ?? result.message}`);
+      }
+    } catch (e: any) {
+      out.ordersErrors += 1;
+      errors.push(`crm-sync ${o.clover_order_id}: ${e?.message ?? String(e)}`);
+    }
+  }
+
+  // 3. Run customer purchase mapping & tag pipeline for a small batch.
+  try {
+    const ops = await processPendingPurchases(limit);
+    out.tagsApplied = ops.tagsApplied ?? 0;
+    out.tagsVerified = ops.tagsVerified ?? 0;
+    out.ordersErrors += ops.errors ?? 0;
+  } catch (e: any) {
+    errors.push(`purchase-mapping: ${e?.message ?? String(e)}`);
+  }
+
+  return out;
 }
 
 // ---- Last sync run lookup ----------------------------------------------
