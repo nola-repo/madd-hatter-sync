@@ -57,22 +57,29 @@ export const Route = createFileRoute("/api/sync")({
           return Response.json({ error: "Unauthorized" }, { status: 401 });
         }
 
+        const batchLimit = Math.min(
+          100,
+          Math.max(1, parseInt(url.searchParams.get("limit") ?? "25", 10) || 25),
+        );
+        const rangeParam = (url.searchParams.get("range") ?? "today").toLowerCase() as
+          "today" | "week" | "month";
+
         try {
           if (step === "fetch") {
-            // Step A only: pull Clover → Supabase (fast, ~5-10s)
-            const result = await stepFetch();
-            return Response.json({ ok: true, step: "fetch", ...result });
+            // Step A: bounded Clover pull to stay well within 30s timeout
+            const result = await stepFetch(rangeParam);
+            return Response.json({ ok: true, step: "fetch", range: rangeParam, ...result });
           }
 
           if (step === "push") {
-            // Step B only: Supabase → GHL contacts + Purchase Items
-            const result = await stepPush(25);
-            return Response.json({ ok: true, step: "push", ...result });
+            // Step B: sync bounded batch of orders to CRM
+            const result = await stepPush(batchLimit);
+            return Response.json({ ok: true, step: "push", limit: batchLimit, ...result });
           }
 
-          // No step specified: run both (may be slow — manual testing only)
-          const fetchResult = await stepFetch();
-          const pushResult = await stepPush(25);
+          // No step specified: run small fetch + small push
+          const fetchResult = await stepFetch(rangeParam);
+          const pushResult = await stepPush(batchLimit);
           return Response.json({
             ok: true,
             step: "both",
@@ -236,15 +243,16 @@ async function verifyCloverHmac(
 
 // ---- Step A: Pull Clover data into Supabase (fast, bounded for cron) ----
 
-async function stepFetch() {
-  console.log("[sync] stepFetch: pulling Clover data...");
-  // Limit to recent 7 days during periodic cron to ensure it completes
-  // well within the 30s cron-job.org timeout ceiling.
-  const result = await refreshPosData({ kind: "incremental", range: "week" });
+async function stepFetch(range: "today" | "week" | "month" = "today") {
+  console.log(`[sync] stepFetch: pulling Clover data (${range})...`);
+  // Use "today" by default for routine 15-minute cron triggers (typically 1-2 pages of orders, 2-4 seconds)
+  // to guarantee finishing well under cron-job.org's 30s ceiling.
+  const result = await refreshPosData({ kind: "incremental", range });
   console.log(
     `[sync] stepFetch done: ${result.customersUpserted} customers, ${result.ordersUpserted} orders`,
   );
   return {
+    range,
     customersUpserted: result.customersUpserted ?? 0,
     ordersUpserted: result.ordersUpserted ?? 0,
     itemsUpserted: result.orderItemsUpserted ?? 0,

@@ -311,8 +311,9 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
   // 7. Orders — full expansion: lineItems + discounts + modifiers, payments +
   //    refunds, refunds, discounts, customers, serviceCharge, employee.
   await safe("orders", async () => {
-    // For cron incremental runs, cap maxPages at 15 (up to 1,500 recent orders) to stay within the 30s ceiling
-    const maxOrderPages = kind === "incremental" ? 15 : 150;
+    // In cron/batch mode, cap to a tight number of pages (e.g. 3-5 pages = 300-500 orders)
+    // so the Clover API calls finish in ~3-5 seconds well below the 30s timeout.
+    const maxOrderPages = kind === "incremental" ? (range === "today" ? 3 : 5) : 150;
     const orderPageOpts = {
       limit: 100,
       maxPages: maxOrderPages,
