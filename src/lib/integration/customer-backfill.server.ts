@@ -212,22 +212,34 @@ async function applyCustomerPurchaseTags(
 ): Promise<number> {
   try {
     const sb = getSupabaseServer();
-    // 1. Find all order IDs for this customer
+    // 1. Find all order IDs for this customer (check both internal id and clover_order_id)
     const { data: orders } = await sb
       .from("orders")
-      .select("id")
+      .select("id, clover_order_id")
       .eq("clover_customer_id", cloverCustomerId);
 
     if (!orders || orders.length === 0) return 0;
-    const orderIds = orders.map((o) => o.id);
+    const orderIds = orders.map((o) => o.id).filter(Boolean);
+    const cloverOrderIds = orders.map((o) => o.clover_order_id).filter(Boolean);
 
-    // 2. Find distinct item names purchased
-    const { data: items } = await sb
-      .from("order_items")
-      .select("item_name")
-      .in("order_id", orderIds.slice(0, 100));
+    // 2. Find distinct item names purchased (by order_id or clover_order_id)
+    let items: Array<{ item_name: string }> = [];
+    if (orderIds.length > 0) {
+      const { data: byOrderId } = await sb
+        .from("order_items")
+        .select("item_name")
+        .in("order_id", orderIds.slice(0, 100));
+      if (byOrderId) items.push(...byOrderId);
+    }
+    if (items.length === 0 && cloverOrderIds.length > 0) {
+      const { data: byCloverOrderId } = await sb
+        .from("order_items")
+        .select("item_name")
+        .in("clover_order_id", cloverOrderIds.slice(0, 100));
+      if (byCloverOrderId) items.push(...byCloverOrderId);
+    }
 
-    if (!items || items.length === 0) return 0;
+    if (items.length === 0) return 0;
     const uniqueItems = Array.from(new Set(items.map((it) => it.item_name).filter(Boolean)));
 
     let taggedCount = 0;
@@ -239,16 +251,22 @@ async function applyCustomerPurchaseTags(
         );
         if (res.status === "applied" || res.status === "already_tagged") {
           taggedCount += 1;
-          // Record in purchase_tags table
+          const tagLabel = purchaseTagLabel(itemName);
+          const normalized = normalizeItemName(itemName);
+          // Record in purchase_tags table as applied + verified so monitoring and
+          // synced tabs show verified tag badges.
           await sb.from("purchase_tags").upsert(
             {
               clover_merchant_id: getIntegrationConfig().clover.merchantId,
               clover_customer_id: cloverCustomerId,
               ghl_contact_id: ghlContactId,
               item_name: itemName,
-              normalized_item_name: normalizeItemName(itemName),
-              expected_tag: purchaseTagLabel(itemName),
+              normalized_item_name: normalized,
+              tag_label: tagLabel,
+              expected_tag: tagLabel,
               status: "applied",
+              verification_status: "verified",
+              verified_at: new Date().toISOString(),
               attempt_count: 1,
               last_attempt_at: new Date().toISOString(),
               last_success_at: new Date().toISOString(),

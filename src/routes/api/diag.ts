@@ -157,7 +157,26 @@ export const Route = createFileRoute("/api/diag")({
             });
           }
 
+          // Sample customer mappings & purchase tags to inspect state
+          const { data: mappingsSample } = await sb.from("customer_mappings").select("*").limit(10);
+          const { data: tagsSample } = await sb.from("purchase_tags").select("*").limit(10);
+          const { data: phoneSampleCust } = await sb
+            .from("customers")
+            .select("*")
+            .eq("phone", "+12016158647")
+            .maybeSingle();
+          const { data: phoneSampleOrders } = phoneSampleCust?.clover_customer_id
+            ? await sb
+                .from("orders")
+                .select("id, clover_order_id, clover_customer_id, status, payment_status")
+                .eq("clover_customer_id", phoneSampleCust.clover_customer_id)
+            : { data: [] };
+
           return Response.json({
+            mappingsSample,
+            tagsSample,
+            phoneSampleCust,
+            phoneSampleOrders,
             success: true,
             syncSecretDiag,
             configuredLocationId: cfg.ghl.locationId,

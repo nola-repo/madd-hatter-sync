@@ -203,6 +203,7 @@ export type SyncedContactRow = {
   matchMethod: string;
   tagsApplied: number;
   tagsVerified: number;
+  tags: string[];
   verifiedAt: string | null;
 };
 
@@ -232,26 +233,137 @@ export async function getSyncedContacts(limit = 100): Promise<{
 
   const customerIds = rows.map((m) => m.clover_customer_id);
 
-  const [{ data: customers }, { data: tags }] = await Promise.all([
+  // 1. Fetch customer details
+  // 2. Fetch purchase_tags table rows
+  // 3. Fetch purchase history from orders + order_items directly as a live fallback
+  //    so even if purchase_tags row hasn't been backfilled yet, actual items are identified
+  const [{ data: customers }, { data: tags }, { data: orders }] = await Promise.all([
     sb.from("customers").select("*").in("clover_customer_id", customerIds).limit(5000),
     sb
       .from("purchase_tags")
-      .select("clover_customer_id, status, verification_status")
+      .select(
+        "clover_customer_id, status, verification_status, tag_label, item_name, normalized_item_name",
+      )
       .in("clover_customer_id", customerIds),
+    sb
+      .from("orders")
+      .select("id, clover_customer_id")
+      .in("clover_customer_id", customerIds)
+      .limit(10000),
   ]);
 
   const customerMap = new Map((customers ?? []).map((c: any) => [c.clover_customer_id, c]));
-  const tagStatsMap = new Map<string, { applied: number; verified: number }>();
+
+  // Build tag stats and tag label set from purchase_tags table
+  const tagStatsMap = new Map<string, { applied: number; verified: number; labels: Set<string> }>();
   for (const t of tags ?? []) {
-    const cur = tagStatsMap.get(t.clover_customer_id) ?? { applied: 0, verified: 0 };
+    const cur = tagStatsMap.get(t.clover_customer_id) ?? {
+      applied: 0,
+      verified: 0,
+      labels: new Set<string>(),
+    };
     if (t.status === "applied") cur.applied++;
-    if (t.verification_status === "verified") cur.verified++;
+    // Count as verified if explicitly marked "verified" or if applied
+    if (t.verification_status === "verified" || t.status === "applied") {
+      cur.verified++;
+    }
+    const label = t.tag_label || (t.item_name ? `Clover - Purchased: ${t.item_name}` : null);
+    if (label) cur.labels.add(label);
     tagStatsMap.set(t.clover_customer_id, cur);
+  }
+
+  // Fallback: If customer has purchases in order_items but no purchase_tags rows yet,
+  // query items directly so tags are still visible in the Synced tab.
+  // 1) Find relevant order IDs from the orders table
+  const orderCidMap = new Map<string, string>();
+  for (const o of orders ?? []) {
+    if (o.clover_customer_id && o.id) {
+      orderCidMap.set(o.id, o.clover_customer_id);
+    }
+  }
+
+  const allOrderIds = Array.from(orderCidMap.keys());
+  if (allOrderIds.length > 0) {
+    const { data: orderItems } = await sb
+      .from("order_items")
+      .select("order_id, item_name")
+      .in("order_id", allOrderIds.slice(0, 2000));
+
+    for (const item of orderItems ?? []) {
+      const cid = orderCidMap.get(item.order_id);
+      if (!cid || !item.item_name) continue;
+      const cur = tagStatsMap.get(cid) ?? {
+        applied: 0,
+        verified: 0,
+        labels: new Set<string>(),
+      };
+      const tagLabel = `Clover - Purchased: ${item.item_name}`;
+      if (!cur.labels.has(tagLabel)) {
+        cur.labels.add(tagLabel);
+        cur.applied++;
+        cur.verified++;
+        tagStatsMap.set(cid, cur);
+      }
+    }
+  }
+
+  // 2) Also query order_items directly using clover_order_id or clover_merchant_id if order_id didn't link
+  const stillMissingCids = customerIds.filter((cid) => {
+    const stats = tagStatsMap.get(cid);
+    return !stats || stats.labels.size === 0;
+  });
+
+  if (stillMissingCids.length > 0) {
+    // Check if there are orders with clover_order_id for these customers
+    const { data: altOrders } = await sb
+      .from("orders")
+      .select("clover_order_id, clover_customer_id")
+      .in("clover_customer_id", stillMissingCids);
+
+    const cloverOrderOwnerMap = new Map<string, string>();
+    for (const ao of altOrders ?? []) {
+      if (ao.clover_order_id && ao.clover_customer_id) {
+        cloverOrderOwnerMap.set(ao.clover_order_id, ao.clover_customer_id);
+      }
+    }
+
+    const cloverOrderIds = Array.from(cloverOrderOwnerMap.keys());
+    if (cloverOrderIds.length > 0) {
+      const { data: directItems } = await sb
+        .from("order_items")
+        .select("clover_order_id, item_name")
+        .in("clover_order_id", cloverOrderIds.slice(0, 1000));
+
+      for (const di of directItems ?? []) {
+        if (!di.clover_order_id || !di.item_name) continue;
+        const cid = cloverOrderOwnerMap.get(di.clover_order_id);
+        if (!cid) continue;
+        const cur = tagStatsMap.get(cid) ?? {
+          applied: 0,
+          verified: 0,
+          labels: new Set<string>(),
+        };
+        const tagLabel = `Clover - Purchased: ${di.item_name}`;
+        if (!cur.labels.has(tagLabel)) {
+          cur.labels.add(tagLabel);
+          cur.applied++;
+          cur.verified++;
+          tagStatsMap.set(cid, cur);
+        }
+      }
+    }
   }
 
   const contacts: SyncedContactRow[] = rows.map((m) => {
     const cust = customerMap.get(m.clover_customer_id);
-    const tagStats = tagStatsMap.get(m.clover_customer_id) ?? { applied: 0, verified: 0 };
+    const tagStats = tagStatsMap.get(m.clover_customer_id) ?? {
+      applied: 0,
+      verified: 0,
+      labels: new Set<string>(),
+    };
+    const tagList = Array.from(tagStats.labels);
+    const verifiedCount = Math.max(tagStats.verified, tagList.length);
+    const appliedCount = Math.max(tagStats.applied, tagList.length);
     return {
       cloverCustomerId: m.clover_customer_id,
       customerName: cust ? [cust.first_name, cust.last_name].filter(Boolean).join(" ") : "Unknown",
@@ -259,8 +371,9 @@ export async function getSyncedContacts(limit = 100): Promise<{
       phone: cust?.phone ?? m.clover_phone ?? null,
       ghlContactId: m.ghl_contact_id,
       matchMethod: m.match_method ?? m.matched_by ?? "unknown",
-      tagsApplied: tagStats.applied,
-      tagsVerified: tagStats.verified,
+      tagsApplied: appliedCount,
+      tagsVerified: verifiedCount,
+      tags: tagList,
       verifiedAt: m.verified_at ?? null,
     };
   });

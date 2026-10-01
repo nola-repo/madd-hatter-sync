@@ -14,6 +14,7 @@ export type SyncedContactRow = {
   matchMethod: string | null;
   tagsApplied: number;
   tagsVerified: number;
+  tags?: string[];
   verifiedAt: string | null;
 };
 
@@ -64,12 +65,38 @@ export function SyncedContactsTab({ rows, total }: { rows: SyncedContactRow[]; t
                       </a>
                     </td>
                     <td className="py-2.5 pr-4 text-xs text-muted-foreground">{c.matchMethod}</td>
-                    <td className="py-2.5 pr-4">{c.tagsApplied}</td>
                     <td className="py-2.5 pr-4">
-                      {c.tagsVerified > 0 ? (
-                        <Badge variant="default" className="text-[10px]">
-                          {c.tagsVerified} verified
-                        </Badge>
+                      {c.tagsApplied > 0 ? (
+                        <span className="font-medium text-foreground">{c.tagsApplied}</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="py-2.5 pr-4">
+                      {c.tagsVerified > 0 || (c.tags && c.tags.length > 0) ? (
+                        <div className="flex flex-col gap-1 items-start">
+                          <Badge variant="default" className="text-[10px]">
+                            {Math.max(c.tagsVerified, c.tags?.length ?? 0)} verified
+                          </Badge>
+                          {c.tags && c.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 max-w-[280px]">
+                              {c.tags.slice(0, 4).map((tag, idx) => (
+                                <span
+                                  key={idx}
+                                  className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-primary/10 text-primary font-medium truncate max-w-[220px]"
+                                  title={tag}
+                                >
+                                  {tag.replace(/^Clover - Purchased:\s*/i, "")}
+                                </span>
+                              ))}
+                              {c.tags.length > 4 && (
+                                <span className="text-[9px] text-muted-foreground">
+                                  +{c.tags.length - 4} more
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
