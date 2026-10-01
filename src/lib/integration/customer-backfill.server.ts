@@ -33,6 +33,7 @@ import {
   type GhlContact,
 } from "./ghl.server";
 import { applyPurchaseTag, purchaseTagLabel, normalizeItemName } from "./ghl-tags.server";
+import { autoResolveAmbiguous } from "./backfill-ambig.server";
 
 export type BackfillSummary = {
   scanned: number;
@@ -154,6 +155,24 @@ async function withCrmRateLimitGuard<T>(
 }
 
 // ---- Cursor persistence (so a timed-out batch resumes cleanly) --------
+//
+// The cursor is a composite "<created_at_iso>|<clover_customer_id>" string.
+// We order the stranded query by created_at ASC and resume by filtering
+// `created_at > cursorTs` (or `>=` with id tiebreak). This is STABLE across
+// ticks — unlike findIndex against a re-queried list, which shifts every
+// time a customer gets mapped and never reliably advances.
+
+type BackfillCursor = { ts: string; id: string };
+
+function encodeCursor(ts: string, id: string): string {
+  return `${ts}|${id}`;
+}
+function decodeCursor(raw: string | null): BackfillCursor | null {
+  if (!raw || !raw.includes("|")) return null;
+  const [ts, id] = raw.split("|");
+  if (!ts || !id) return null;
+  return { ts, id };
+}
 
 async function getBackfillCursor(): Promise<string | null> {
   try {
@@ -273,19 +292,36 @@ export async function backfillStrandedCustomers(
   const batchLimit = Math.min(100, Math.max(1, resolvedLimit));
 
   // Find customers WITH a usable email OR phone but WITHOUT a mapping.
-  // Anti-join via NOT EXISTS keeps it cheap and avoids loading customer_mappings.
+  //
+  // We fetch in two steps to keep the anti-join reliable on PostgREST:
+  //   1. Pull the set of already-mapped Clover customer IDs (small).
+  //   2. Query customers with email/phone, ordered by created_at ASC so the
+  //      cursor is stable, then filter out mapped IDs in memory.
+  //
+  // The cursor is a composite "<created_at>|<id>" so a paused tick resumes
+  // at exactly the next unprocessed customer — never re-processing.
+  const resumeCursor = decodeCursor(await getBackfillCursor());
+
+  const { data: mappedRows } = await sb
+    .from("customer_mappings")
+    .select("clover_customer_id")
+    .eq("clover_merchant_id", cfg.clover.merchantId);
+  const mappedSet = new Set((mappedRows ?? []).map((m: any) => m.clover_customer_id));
+
+  // NOTE: We intentionally do NOT push the cursor into the PostgREST query.
+  // The previous approach used `.or("created_at.gt.X,and(created_at.eq.X,id.gt.Y)")`
+  // which is INVALID PostgREST syntax — it silently failed every tick, so the
+  // batch never advanced past the first pause. That is the root cause of the
+  // "stuck at 14" count. Instead we over-fetch ordered rows and advance the
+  // cursor in memory, which is reliable and still cheap (the mappedSet filter
+  // is a Set lookup).
   const { data: strandedRaw, error: qErr } = await sb
     .from("customers")
     .select("clover_customer_id, first_name, last_name, email, phone, created_at")
     .eq("clover_merchant_id", cfg.clover.merchantId)
     .or("email.not.is.null,phone.not.is.null")
-    .not(
-      "clover_customer_id",
-      "in",
-      `(select clover_customer_id from public.customer_mappings where clover_merchant_id = '${cfg.clover.merchantId.replace(/'/g, "''")}')`,
-    )
-    .order("created_at", { ascending: false })
-    .limit(batchLimit * 3); // over-fetch a little; time-box is the real cap
+    .order("created_at", { ascending: true })
+    .limit(batchLimit * 6); // over-fetch; time-box is the real cap
 
   if (qErr) {
     out.errors.push(`query stranded customers: ${qErr.message}`);
@@ -293,27 +329,42 @@ export async function backfillStrandedCustomers(
     return out;
   }
 
-  const stranded = (strandedRaw ?? []) as Array<{
-    clover_customer_id: string;
-    first_name: string | null;
-    last_name: string | null;
-    email: string | null;
-    phone: string | null;
-  }>;
+  // Resume past the cursor in memory: skip rows at/before the cursor position.
+  const allStranded = (
+    (strandedRaw ?? []) as Array<{
+      clover_customer_id: string;
+      first_name: string | null;
+      last_name: string | null;
+      email: string | null;
+      phone: string | null;
+      created_at: string;
+    }>
+  ).filter((c) => !mappedSet.has(c.clover_customer_id));
+
+  let stranded = allStranded;
+  if (resumeCursor) {
+    const cursorIdx = allStranded.findIndex(
+      (c) => c.created_at === resumeCursor.ts && c.clover_customer_id === resumeCursor.id,
+    );
+    if (cursorIdx >= 0) {
+      stranded = allStranded.slice(cursorIdx + 1);
+    } else {
+      // Cursor row no longer exists (mapped since last tick) — fall back to
+      // timestamp comparison so we still resume forward, never backward.
+      stranded = allStranded.filter(
+        (c) =>
+          c.created_at > resumeCursor.ts ||
+          (c.created_at === resumeCursor.ts && c.clover_customer_id > resumeCursor.id),
+      );
+    }
+  }
   out.scanned = stranded.length;
 
-  // Resume from the last saved cursor if a previous tick paused.
-  const resumeCursor = await getBackfillCursor();
-  let startIndex = 0;
-  if (resumeCursor) {
-    const idx = stranded.findIndex((c) => c.clover_customer_id === resumeCursor);
-    if (idx >= 0) startIndex = idx;
-  }
-
-  for (let i = startIndex; i < stranded.length; i++) {
-    // Hard time-box: stop before 22s so the response always returns.
+  for (let i = 0; i < stranded.length; i++) {
+    // Hard time-box: stop before the ceiling so the response always returns.
     if (Date.now() - startedAt > maxElapsedMs) {
-      out.pausedAtCursor = stranded[i].clover_customer_id;
+      const prev = stranded[Math.max(0, i - 1)];
+      out.pausedAtCursor = prev ? encodeCursor(prev.created_at, prev.clover_customer_id) : null;
       console.log(
         `[backfill] time ceiling reached (${Date.now() - startedAt}ms), pausing at cursor ${out.pausedAtCursor}.`,
       );
@@ -518,10 +569,40 @@ export async function backfillStrandedCustomers(
     }
   }
 
+  // ---- AMBIGUOUS auto-resolve pass ----
+  // Take a second pass over AMBIGUOUS_MATCH audit rows where the email and
+  // phone BOTH resolve to the SAME CRM contact (can happen due to timing /
+  // duplicate contacts). Auto-resolve those to MATCHED and persist the
+  // mapping. Genuine CONFLICT rows (two different contacts) stay held.
+  if (Date.now() - startedAt < maxElapsedMs - 3000) {
+    try {
+      await autoResolveAmbiguous(cfg, out, startedAt, maxElapsedMs);
+    } catch {
+      // Non-blocking: the main pass already made progress.
+    }
+  }
+
   out.elapsedMs = Date.now() - startedAt;
 
   // Persist the cursor so the next cron tick resumes exactly here.
-  await saveBackfillCursor(out.pausedAtCursor);
+  //
+  // CRITICAL FIX: previously the cursor was only saved when the time-box paused
+  // the batch (pausedAtCursor). When a pass COMPLETED within the window, the
+  // cursor was saved as null → the next tick restarted from the very first
+  // customer and burned its whole window re-reading already-processed rows.
+  // Now we ALWAYS advance the cursor to the last processed row, and only
+  // clear it when the entire stranded queue is drained (so a future new
+  // stranded customer starts a fresh pass from the top).
+  if (out.pausedAtCursor) {
+    await saveBackfillCursor(out.pausedAtCursor);
+  } else if (stranded.length > 0) {
+    const last = stranded[Math.min(out.attempted, stranded.length) - 1];
+    if (last) await saveBackfillCursor(encodeCursor(last.created_at, last.clover_customer_id));
+  } else if (allStranded.length === 0) {
+    // Queue fully drained — clear the cursor so future new customers
+    // (from fresh Clover fetches) start from the top again.
+    await saveBackfillCursor(null);
+  }
 
   // Estimate remaining stranded customers for monitoring.
   try {

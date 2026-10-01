@@ -34,10 +34,10 @@ import {
 import { processPendingPurchases } from "./purchase-ops.server";
 import {
   getMappingMonitorStats,
-  getCustomerMappingTable,
   getReviewQueue,
   getSyncedContacts,
-} from "./customer-match.server";
+} from "./mapping-monitor.server";
+import { getCustomerMappingTable } from "./customer-mapping-table.server";
 import {
   getProductMappings,
   searchCustomerPurchasesByItem,
@@ -650,8 +650,8 @@ export const getMappingTableFn = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     await requireAdmin();
     try {
-      const rows = await getCustomerMappingTable(data.limit ?? 100);
-      return { setupRequired: false as const, rows };
+      const result = await getCustomerMappingTable(data.limit ?? 100);
+      return { setupRequired: false as const, ...result };
     } catch (e) {
       if (isSetupRequired(e)) return setupRequiredResponse(e);
       throw e;
