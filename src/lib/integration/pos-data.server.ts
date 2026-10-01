@@ -82,7 +82,7 @@ export async function getDashboardStats(opts?: {
   range?: "today" | "week" | "month" | "all";
 }): Promise<DashboardStats> {
   const sb = getSupabaseServer();
-  const activeRange = opts?.range ?? "month";
+  const activeRange = opts?.range ?? "today";
 
   // Use the SAME canonical date-range utility as the ingestion layer so the
   // dashboard aggregation and the Clover API fetch always agree on boundaries.

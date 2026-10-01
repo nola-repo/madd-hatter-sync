@@ -25,7 +25,7 @@ export function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [range, setRange] = useState<HomeRange>("month");
+  const [range, setRange] = useState<HomeRange>("today");
 
   const load = async (activeRange: HomeRange = range) => {
     setLoading(true);
