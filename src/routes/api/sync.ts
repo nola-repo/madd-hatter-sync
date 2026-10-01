@@ -274,7 +274,7 @@ async function stepFetch(range: "today" | "week" | "month" = "today") {
 
 // ---- Step B: Push pending orders to GHL (small batch, fast) -------------
 
-async function stepPush(limit = 25) {
+async function stepPush(limit = 10) {
   console.log(`[sync] stepPush: syncing up to ${limit} orders to CRM...`);
   const result = await runCrmSync(limit);
   console.log(
@@ -298,7 +298,7 @@ async function stepPush(limit = 25) {
 
 async function stepBackfill(limit = 25) {
   console.log(`[sync] stepBackfill: resolving up to ${limit} stranded customers...`);
-  const result = await backfillStrandedCustomers(limit, 22_000);
+  const result = await backfillStrandedCustomers(limit, 18_000);
   console.log(
     `[sync] stepBackfill done: attempted=${result.attempted} matched=${result.matchedExisting} created=${result.autoCreated} conflicts=${result.conflicts} remaining=${result.remaining}` +
       (result.pausedAtCursor ? ` pausedAt=${result.pausedAtCursor}` : ""),

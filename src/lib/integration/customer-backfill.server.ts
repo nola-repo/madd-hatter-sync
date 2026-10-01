@@ -212,7 +212,8 @@ async function applyCustomerPurchaseTags(
     const uniqueItems = Array.from(new Set(items.map((it) => it.item_name).filter(Boolean)));
 
     let taggedCount = 0;
-    for (const itemName of uniqueItems.slice(0, 15)) {
+    // Cap to top 3 items during backfill so individual contact tagging doesn't blow past time budget
+    for (const itemName of uniqueItems.slice(0, 3)) {
       try {
         const res = await withCrmRateLimitGuard(`tag ${ghlContactId} ${itemName}`, () =>
           applyPurchaseTag(ghlContactId, itemName),
@@ -259,7 +260,7 @@ async function applyCustomerPurchaseTags(
  */
 export async function backfillStrandedCustomers(
   limit?: number,
-  maxElapsedMs = 22_000,
+  maxElapsedMs = 18_000,
 ): Promise<BackfillSummary> {
   const cfg = getIntegrationConfig();
   const sb = getSupabaseServer();

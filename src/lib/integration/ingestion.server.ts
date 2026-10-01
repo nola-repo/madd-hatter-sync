@@ -294,77 +294,83 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
           ? Math.round(Number(v))
           : 0;
 
-  // 1. Categories
-  await safe("categories", async () => {
-    const { elements: cats } = await cloverPaginate(`/v3/merchants/${merchantId}/categories`);
-    counters.categoriesFetched = cats.length;
-    for (const cat of cats) await upsertCategory(merchantId, cat);
-    counters.categoriesUpserted = cats.length;
-  });
+  // For incremental syncs (such as routine 15-minute cron triggers),
+  // skip static catalog data (categories, products, employees, modifiers, discounts)
+  // to finish in 2-4 seconds and stay far below the 30s ceiling.
+  // Full catalog is pulled on kind === "full".
+  if (kind === "full") {
+    // 1. Categories
+    await safe("categories", async () => {
+      const { elements: cats } = await cloverPaginate(`/v3/merchants/${merchantId}/categories`);
+      counters.categoriesFetched = cats.length;
+      for (const cat of cats) await upsertCategory(merchantId, cat);
+      counters.categoriesUpserted = cats.length;
+    });
 
-  const catNameMap = new Map<string, string>();
-  await safe("category-names", async () => {
-    const { elements: cats } = await cloverPaginate(`/v3/merchants/${merchantId}/categories`);
-    for (const cat of cats) if (cat.id && cat.name) catNameMap.set(cat.id, cat.name);
-  });
+    const catNameMap = new Map<string, string>();
+    await safe("category-names", async () => {
+      const { elements: cats } = await cloverPaginate(`/v3/merchants/${merchantId}/categories`);
+      for (const cat of cats) if (cat.id && cat.name) catNameMap.set(cat.id, cat.name);
+    });
 
-  // 2. Products
-  await safe("products", async () => {
-    const { elements: items } = await cloverPaginate(
-      `/v3/merchants/${merchantId}/items?expand=categories`,
-    );
-    counters.productsFetched = items.length;
-    for (const it of items) {
-      const catId = it.categories?.elements?.[0]?.id;
-      await upsertProduct(merchantId, it, catId ? (catNameMap.get(catId) ?? null) : null);
-    }
-    counters.productsUpserted = items.length;
-  });
+    // 2. Products
+    await safe("products", async () => {
+      const { elements: items } = await cloverPaginate(
+        `/v3/merchants/${merchantId}/items?expand=categories`,
+      );
+      counters.productsFetched = items.length;
+      for (const it of items) {
+        const catId = it.categories?.elements?.[0]?.id;
+        await upsertProduct(merchantId, it, catId ? (catNameMap.get(catId) ?? null) : null);
+      }
+      counters.productsUpserted = items.length;
+    });
 
-  // 3. Customers (expanded emailAddresses, phoneNumbers, addresses)
-  await safe("customers", async () => {
-    const { elements: customers } = await cloverPaginate(
-      `/v3/merchants/${merchantId}/customers?expand=emailAddresses,phoneNumbers,addresses`,
-    );
-    counters.customersFetched = customers.length;
-    for (const cust of customers) await upsertCustomer(merchantId, cust);
-    counters.customersUpserted = customers.length;
-  });
+    // 3. Customers (expanded emailAddresses, phoneNumbers, addresses)
+    await safe("customers", async () => {
+      const { elements: customers } = await cloverPaginate(
+        `/v3/merchants/${merchantId}/customers?expand=emailAddresses,phoneNumbers,addresses`,
+      );
+      counters.customersFetched = customers.length;
+      for (const cust of customers) await upsertCustomer(merchantId, cust);
+      counters.customersUpserted = customers.length;
+    });
 
-  // 4. Employees
-  await safe("employees", async () => {
-    const { elements: emps } = await cloverPaginate(`/v3/merchants/${merchantId}/employees`);
-    counters.employeesFetched = emps.length;
-    for (const e of emps) await upsertEmployee(merchantId, e);
-    counters.employeesUpserted = emps.length;
-  });
+    // 4. Employees
+    await safe("employees", async () => {
+      const { elements: emps } = await cloverPaginate(`/v3/merchants/${merchantId}/employees`);
+      counters.employeesFetched = emps.length;
+      for (const e of emps) await upsertEmployee(merchantId, e);
+      counters.employeesUpserted = emps.length;
+    });
 
-  // 5. Modifier groups + modifiers
-  await safe("modifier-groups", async () => {
-    const { elements: groups } = await cloverPaginate(
-      `/v3/merchants/${merchantId}/modifier_groups`,
-    );
-    for (const g of groups) await upsertModifierGroup(merchantId, g);
-  });
-  await safe("modifiers", async () => {
-    const { elements: mods } = await cloverPaginate(`/v3/merchants/${merchantId}/modifiers`);
-    counters.modifiersFetched = mods.length;
-    for (const m of mods) await upsertModifier(merchantId, m);
-  });
+    // 5. Modifier groups + modifiers
+    await safe("modifier-groups", async () => {
+      const { elements: groups } = await cloverPaginate(
+        `/v3/merchants/${merchantId}/modifier_groups`,
+      );
+      for (const g of groups) await upsertModifierGroup(merchantId, g);
+    });
+    await safe("modifiers", async () => {
+      const { elements: mods } = await cloverPaginate(`/v3/merchants/${merchantId}/modifiers`);
+      counters.modifiersFetched = mods.length;
+      for (const m of mods) await upsertModifier(merchantId, m);
+    });
 
-  // 6. Discounts
-  await safe("discounts", async () => {
-    const { elements: discounts } = await cloverPaginate(`/v3/merchants/${merchantId}/discounts`);
-    counters.discountsFetched = discounts.length;
-    for (const d of discounts) await upsertDiscount(merchantId, d);
-  });
+    // 6. Discounts
+    await safe("discounts", async () => {
+      const { elements: discounts } = await cloverPaginate(`/v3/merchants/${merchantId}/discounts`);
+      counters.discountsFetched = discounts.length;
+      for (const d of discounts) await upsertDiscount(merchantId, d);
+    });
+  }
 
   // 7. Orders — full expansion: lineItems + discounts + modifiers, payments +
   //    refunds, refunds, discounts, customers, serviceCharge, employee.
   await safe("orders", async () => {
-    // In cron/batch mode, cap to a tight number of pages (e.g. 3-5 pages = 300-500 orders)
-    // so the Clover API calls finish in ~3-5 seconds well below the 30s timeout.
-    const maxOrderPages = kind === "incremental" ? (range === "today" ? 3 : 5) : 150;
+    // In cron/batch mode, cap to a tight number of pages (e.g. 1-2 pages = 100-200 orders)
+    // so the Clover API calls finish in ~2-3 seconds well below the 30s timeout.
+    const maxOrderPages = kind === "incremental" ? (range === "today" ? 2 : 4) : 150;
     const orderPageOpts = {
       limit: 100,
       maxPages: maxOrderPages,
@@ -460,11 +466,11 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
     }
   });
 
-  // 8. Standalone payments
+  // 8. Standalone payments (for incremental sync, cap to 1 page to save time)
   await safe("payments", async () => {
     const { elements: payments } = await cloverPaginate(
       `/v3/merchants/${merchantId}/payments?expand=tender,cardTransaction${dateFilter}`,
-      { limit: 100, maxPages: 20 },
+      { limit: 100, maxPages: kind === "incremental" ? 1 : 20 },
     );
     for (const p of payments) {
       try {
@@ -477,12 +483,12 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
     counters.paymentsUpserted = Math.max(counters.paymentsUpserted, payments.length);
   });
 
-  // 9. Standalone refunds
+  // 9. Standalone refunds (for incremental sync, cap to 1 page)
   await safe("refunds", async () => {
     try {
       const { elements: refunds } = await cloverPaginate(
         `/v3/merchants/${merchantId}/refunds${dateFilter}`,
-        { limit: 100, maxPages: 20 },
+        { limit: 100, maxPages: kind === "incremental" ? 1 : 20 },
       );
       for (const r of refunds) {
         try {
@@ -579,10 +585,15 @@ export async function runCrmSync(limit?: number): Promise<CrmSyncSummary> {
   }
 
   // 2. Sync eligible paid orders to the CRM (purchase records + associations).
-  // Time-boxed loop: abort if we approach 22s so cron-job.org never sees a 30s timeout.
+  // Strict time-boxed loop: abort if we approach 18s so cron-job.org NEVER sees a 30s timeout.
+  // 18s gives plenty of buffer for Cloudflare Worker HTTP headers and response serialization.
   const startTime = Date.now();
-  const maxElapsedMs = 22_000;
+  const maxElapsedMs = 18_000;
   let pausedAtCursor: string | null = null;
+
+  // In each cron push, process a tight chunk of orders (e.g. 5-10 orders)
+  // Each order can have multiple line items, GHL contact searches, and tag calls.
+  const effectiveBatchLimit = Math.min(10, batchLimit);
 
   const { data: eligible, error: eErr } = await sb
     .from("orders")
@@ -590,7 +601,7 @@ export async function runCrmSync(limit?: number): Promise<CrmSyncSummary> {
     .eq("payment_status", "PAID")
     .in("status", ["pending", "error", "held_for_review"])
     .order("created_time", { ascending: false })
-    .limit(batchLimit);
+    .limit(effectiveBatchLimit);
   if (eErr) {
     errors.push(`fetch eligible for sync: ${eErr.message}`);
     return out;
@@ -631,14 +642,16 @@ export async function runCrmSync(limit?: number): Promise<CrmSyncSummary> {
     }
   }
 
-  // 3. Run customer purchase mapping & tag pipeline for a small batch.
-  try {
-    const ops = await processPendingPurchases(batchLimit);
-    out.tagsApplied = ops.tagsApplied ?? 0;
-    out.tagsVerified = ops.tagsVerified ?? 0;
-    out.ordersErrors += ops.errors ?? 0;
-  } catch (e: any) {
-    errors.push(`purchase-mapping: ${e?.message ?? String(e)}`);
+  // 3. Run customer purchase mapping & tag pipeline only if time remains (< 15s elapsed).
+  if (Date.now() - startTime < 15_000) {
+    try {
+      const ops = await processPendingPurchases(Math.min(5, batchLimit));
+      out.tagsApplied = ops.tagsApplied ?? 0;
+      out.tagsVerified = ops.tagsVerified ?? 0;
+      out.ordersErrors += ops.errors ?? 0;
+    } catch (e: any) {
+      errors.push(`purchase-mapping: ${e?.message ?? String(e)}`);
+    }
   }
 
   if (pausedAtCursor) {

@@ -61,7 +61,7 @@ async function handleBackfill(request: Request): Promise<Response> {
 
   try {
     console.log("[backfill] starting customer-first bulk backfill...");
-    const summary = await backfillStrandedCustomers(limit, 22_000);
+    const summary = await backfillStrandedCustomers(limit, 18_000);
     const ok = summary.errors.length === 0;
     return Response.json(
       {
