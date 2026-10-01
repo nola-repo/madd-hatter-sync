@@ -25,7 +25,8 @@ import {
   listCustomersWithPurchases,
 } from "./pos-data.server";
 
-import { refreshPosData, getLastSyncRun } from "./ingestion.server";
+import { refreshPosData } from "./ingestion.server";
+import { getLastSyncRun } from "./sync-run-lookup.server";
 import {
   findCustomersByItem,
   tagCustomersByItem,

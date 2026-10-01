@@ -329,6 +329,7 @@ export type LastSyncRun = {
   customersUpserted: number;
   paymentsUpserted: number;
   productsUpserted: number;
+  errorMessage: string | null;
 } | null;
 
 // ---- Extended list row types -------------------------------------------

@@ -370,7 +370,8 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
   await safe("orders", async () => {
     // In cron/batch mode, cap to a tight number of pages (e.g. 1-2 pages = 100-200 orders)
     // so the Clover API calls finish in ~2-3 seconds well below the 30s timeout.
-    const maxOrderPages = kind === "incremental" ? (range === "today" ? 2 : 4) : 150;
+    // `range` is a DateRange object; compare its label, not the object itself.
+    const maxOrderPages = kind === "incremental" ? (range.label === "today" ? 2 : 4) : 150;
     const orderPageOpts = {
       limit: 100,
       maxPages: maxOrderPages,
@@ -504,7 +505,9 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
   });
 
   const status: "completed" | "failed" =
-    errors.length > 0 && counters.ordersUpserted === 0 ? "failed" : "completed";
+    errors.some((e) => e.startsWith("orders:")) && counters.ordersUpserted === 0
+      ? "failed"
+      : "completed";
 
   // NOTE: CRM sync (purchase records + tags) is intentionally NOT run inside
   // refreshPosData. It is split into runCrmSync() below so the cron pipeline
