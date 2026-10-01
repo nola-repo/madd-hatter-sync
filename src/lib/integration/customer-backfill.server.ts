@@ -528,6 +528,7 @@ export async function backfillStrandedCustomers(
           email: email ?? "",
           phone: phone ?? "",
           note: `Backfilled from Clover POS. Clover Customer ID: ${c.clover_customer_id}`,
+          tags: ["clover pos customer"],
         }),
       );
 

@@ -59,14 +59,27 @@ export function SyncControl() {
                   {formatDateTime(new Date(lastRun.finishedAt).getTime())}
                 </span>
               </div>
-              <div className="mt-0.5">
+              <div className="mt-0.5 flex flex-wrap items-center gap-1.5 sm:justify-end">
                 <Badge
                   variant={lastRun.status === "completed" ? "default" : "destructive"}
                   className="text-[10px]"
                 >
                   {lastRun.status ?? "—"}
-                </Badge>{" "}
-                · {lastRun.ordersUpserted ?? 0} orders · {lastRun.customersUpserted ?? 0} customers
+                </Badge>
+                <span>
+                  · {lastRun.ordersUpserted ?? 0} orders · {lastRun.customersUpserted ?? 0}{" "}
+                  customers
+                </span>
+                {lastRun.errorMessage && (
+                  <span
+                    className="block w-full text-[10px] text-destructive sm:text-right"
+                    title={lastRun.errorMessage}
+                  >
+                    {lastRun.errorMessage.length > 50
+                      ? `${lastRun.errorMessage.slice(0, 50)}…`
+                      : lastRun.errorMessage}
+                  </span>
+                )}
               </div>
             </div>
           )}
