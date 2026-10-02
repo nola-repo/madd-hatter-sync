@@ -18,6 +18,7 @@ import type {
   PurchaseTagSummary,
 } from "@/lib/integration/purchase-mapping.server";
 import { StatCard, SummaryStat, STATUS_COLORS, type Range } from "./shared";
+import { Pager, usePagination } from "./pagination";
 
 export function ItemSearchTab({
   search,
@@ -56,10 +57,10 @@ export function ItemSearchTab({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="flex-1">
               <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                Item name (e.g. "Wings")
+                Item name (e.g. "Wings") — leave blank to show all recent
               </label>
               <Input
-                placeholder="Enter an item name…"
+                placeholder="Enter an item name, or leave blank for all…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && onSearch()}
@@ -82,13 +83,13 @@ export function ItemSearchTab({
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={onSearch} disabled={loading || !search.trim()} className="h-9">
+            <Button onClick={onSearch} disabled={loading} className="h-9">
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <Search className="h-4 w-4" />
               )}
-              Find Customers
+              {search.trim() ? "Find Customers" : "Show All"}
             </Button>
           </div>
           {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
@@ -115,7 +116,11 @@ export function ItemSearchTab({
                   value={money(result.totalRevenueCents)}
                   icon={<Tag className="h-4 w-4" />}
                 />
-                <StatCard label="Item" value={result.itemName} icon={<Tag className="h-4 w-4" />} />
+                <StatCard
+                  label="Item"
+                  value={result.itemName || "All Items"}
+                  icon={<Tag className="h-4 w-4" />}
+                />
               </div>
 
               <Card className="mb-6">
@@ -124,18 +129,20 @@ export function ItemSearchTab({
                     <CardTitle className="text-base">
                       Customers ({result.customers.length})
                     </CardTitle>
-                    <Button
-                      onClick={onApplyTags}
-                      disabled={tagging || result.customers.length === 0}
-                      className="h-9"
-                    >
-                      {tagging ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Tag className="h-4 w-4" />
-                      )}
-                      Apply "Purchased: {result.itemName}" Tags
-                    </Button>
+                    {search.trim() && (
+                      <Button
+                        onClick={onApplyTags}
+                        disabled={tagging || result.customers.length === 0}
+                        className="h-9"
+                      >
+                        {tagging ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Tag className="h-4 w-4" />
+                        )}
+                        Apply "Purchased: {result.itemName}" Tags
+                      </Button>
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -152,71 +159,7 @@ export function ItemSearchTab({
                       </div>
                     </div>
                   )}
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                          <th className="pb-2 pr-4 font-medium">Customer</th>
-                          <th className="pb-2 pr-4 font-medium">Email / Phone</th>
-                          <th className="pb-2 pr-4 font-medium">Qty</th>
-                          <th className="pb-2 pr-4 font-medium">Spent</th>
-                          <th className="pb-2 pr-4 font-medium">Date</th>
-                          <th className="pb-2 pr-4 font-medium">Order</th>
-                          <th className="pb-2 pr-4 font-medium">Match</th>
-                          <th className="pb-2 font-medium">Tag</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {result.customers.map((c, i) => (
-                          <tr key={i} className="border-b border-border/50">
-                            <td className="py-2.5 pr-4 font-medium text-foreground">
-                              {c.customerName}
-                            </td>
-                            <td className="py-2.5 pr-4 text-xs text-muted-foreground">
-                              {c.email || c.phone || "—"}
-                            </td>
-                            <td className="py-2.5 pr-4">{c.quantity}</td>
-                            <td className="py-2.5 pr-4 font-medium">{money(c.amountSpentCents)}</td>
-                            <td className="py-2.5 pr-4 text-xs text-muted-foreground">
-                              {formatDateTime(c.purchaseDate)}
-                            </td>
-                            <td className="py-2.5 pr-4 font-mono text-xs text-muted-foreground">
-                              {c.cloverOrderId}
-                            </td>
-                            <td className="py-2.5 pr-4">
-                              <Badge
-                                variant={(STATUS_COLORS[c.matchStatus] as any) ?? "outline"}
-                                className="text-[10px]"
-                              >
-                                {c.matchStatus}
-                              </Badge>
-                            </td>
-                            <td className="py-2.5 pr-4">
-                              <div className="flex items-center gap-2">
-                                <Badge
-                                  variant={(STATUS_COLORS[c.tagStatus] as any) ?? "outline"}
-                                  className="text-[10px]"
-                                >
-                                  {c.tagStatus}
-                                </Badge>
-                                {c.ghlContactId && (
-                                  <a
-                                    href={`https://app.gohighlevel.com/sub-account/7biYjalPZzmmvKaLw0WN/contacts/${c.ghlContactId}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                                  >
-                                    View in CRM
-                                    <ExternalLink className="h-3 w-3" />
-                                  </a>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <SearchResultsTable customers={result.customers} />
                 </CardContent>
               </Card>
             </>
@@ -231,10 +174,80 @@ export function ItemSearchTab({
 
       {!result && !loading && !error && (
         <EmptyState
-          title="Search for an item to begin"
-          description="Enter an item name like “Wings” to find every customer who purchased it, then apply a purchase tag to their CRM contact."
+          title="Loading recent purchases…"
+          description="The most recent matched purchase records are loading. Enter an item name like “Wings” to filter to a specific product."
         />
       )}
     </>
+  );
+}
+
+function SearchResultsTable({ customers }: { customers: ItemSearchResult["customers"] }) {
+  const { page, setPage, totalPages, pagedRows, total } = usePagination(customers);
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border text-left text-xs text-muted-foreground">
+            <th className="pb-2 pr-4 font-medium">Customer</th>
+            <th className="pb-2 pr-4 font-medium">Email / Phone</th>
+            <th className="pb-2 pr-4 font-medium">Qty</th>
+            <th className="pb-2 pr-4 font-medium">Spent</th>
+            <th className="pb-2 pr-4 font-medium">Date</th>
+            <th className="pb-2 pr-4 font-medium">Order</th>
+            <th className="pb-2 pr-4 font-medium">Match</th>
+            <th className="pb-2 font-medium">Tag</th>
+          </tr>
+        </thead>
+        <tbody>
+          {pagedRows.map((c, i) => (
+            <tr key={i} className="border-b border-border/50">
+              <td className="py-2.5 pr-4 font-medium text-foreground">{c.customerName}</td>
+              <td className="py-2.5 pr-4 text-xs text-muted-foreground">
+                {c.email || c.phone || "—"}
+              </td>
+              <td className="py-2.5 pr-4">{c.quantity}</td>
+              <td className="py-2.5 pr-4 font-medium">{money(c.amountSpentCents)}</td>
+              <td className="py-2.5 pr-4 text-xs text-muted-foreground">
+                {formatDateTime(c.purchaseDate)}
+              </td>
+              <td className="py-2.5 pr-4 font-mono text-xs text-muted-foreground">
+                {c.cloverOrderId}
+              </td>
+              <td className="py-2.5 pr-4">
+                <Badge
+                  variant={(STATUS_COLORS[c.matchStatus] as any) ?? "outline"}
+                  className="text-[10px]"
+                >
+                  {c.matchStatus}
+                </Badge>
+              </td>
+              <td className="py-2.5 pr-4">
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant={(STATUS_COLORS[c.tagStatus] as any) ?? "outline"}
+                    className="text-[10px]"
+                  >
+                    {c.tagStatus}
+                  </Badge>
+                  {c.ghlContactId && (
+                    <a
+                      href={`https://app.gohighlevel.com/sub-account/7biYjalPZzmmvKaLw0WN/contacts/${c.ghlContactId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                    >
+                      View in CRM
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <Pager page={page} totalPages={totalPages} setPage={setPage} total={total} />
+    </div>
   );
 }

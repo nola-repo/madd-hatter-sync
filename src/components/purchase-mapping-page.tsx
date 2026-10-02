@@ -75,11 +75,11 @@ export function PurchaseMappingPage() {
   }, [loadMonitor, syncVersion]);
 
   const search_ = useCallback(async () => {
-    if (!search.trim()) return;
     setLoading(true);
     setError(null);
     setTagSummary(null);
     try {
+      // Empty itemName → server returns the 500 most recent purchases (default load)
       const res = await findFn({ data: { itemName: search.trim(), range } });
       if (res?.setupRequired) {
         setError("Setup required: " + res.message);
@@ -92,6 +92,12 @@ export function PurchaseMappingPage() {
       setLoading(false);
     }
   }, [findFn, search, range]);
+
+  // Auto-load the default set on mount so the Item Search tab isn't blank.
+  useEffect(() => {
+    search_();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const applyTags = useCallback(async () => {
     if (!search.trim()) return;

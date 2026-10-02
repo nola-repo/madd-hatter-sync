@@ -95,29 +95,62 @@ export async function findCustomersByItem(opts: {
   const { rangeToMs } = await import("./clover-dates.server");
   const range = rangeToMs(opts.range ?? "all");
 
-  let itemQuery = sb.from("order_items").select("*");
-  if (opts.itemId) {
-    itemQuery = itemQuery.eq("clover_item_id", opts.itemId);
-  }
-  const { data: items, error: iErr } = await itemQuery.limit(50000);
-  if (iErr) throw new Error(`DB items: ${iErr.message}`);
-  const itemRows = (items ?? []) as OrderItemRow[];
+  let matchedItems: OrderItemRow[];
+  let itemName = "";
+  let cloverItemId: string | null = null;
 
-  let matchedItems = itemRows;
-  let itemName = opts.itemName ?? "";
-  let cloverItemId = opts.itemId ?? null;
-
-  if (!opts.itemId && opts.itemName) {
-    const normalized = normalizeItemName(opts.itemName).toLowerCase();
-    matchedItems = itemRows.filter(
-      (i) => normalizeItemName(i.item_name).toLowerCase() === normalized,
-    );
-    if (matchedItems.length > 0) {
-      itemName = matchedItems[0].item_name;
-      cloverItemId = matchedItems[0].clover_item_id ?? null;
+  if (!opts.itemId && !opts.itemName) {
+    // Default load: no item specified → return the 500 most recent purchases
+    // across all items so the Item Search tab isn't blank on open.
+    const { data: recentOrders } = await sb
+      .from("orders")
+      .select("id")
+      .order("created_time", { ascending: false })
+      .limit(500);
+    const recentOrderIds = (recentOrders ?? []).map((o: any) => o.id);
+    if (recentOrderIds.length === 0) {
+      return {
+        itemFound: false,
+        itemName: "",
+        cloverItemId: null,
+        totalCustomers: 0,
+        totalQuantity: 0,
+        totalRevenueCents: 0,
+        customers: [],
+      };
     }
-  } else if (matchedItems.length > 0) {
-    itemName = matchedItems[0].item_name;
+    const { data: recentItems, error: rErr } = await sb
+      .from("order_items")
+      .select("*")
+      .in("order_id", recentOrderIds)
+      .limit(500);
+    if (rErr) throw new Error(`DB recent items: ${rErr.message}`);
+    matchedItems = (recentItems ?? []) as OrderItemRow[];
+  } else {
+    let itemQuery = sb.from("order_items").select("*");
+    if (opts.itemId) {
+      itemQuery = itemQuery.eq("clover_item_id", opts.itemId);
+    }
+    const { data: items, error: iErr } = await itemQuery.limit(50000);
+    if (iErr) throw new Error(`DB items: ${iErr.message}`);
+    const itemRows = (items ?? []) as OrderItemRow[];
+
+    matchedItems = itemRows;
+    itemName = opts.itemName ?? "";
+    cloverItemId = opts.itemId ?? null;
+
+    if (!opts.itemId && opts.itemName) {
+      const normalized = normalizeItemName(opts.itemName).toLowerCase();
+      matchedItems = itemRows.filter(
+        (i) => normalizeItemName(i.item_name).toLowerCase() === normalized,
+      );
+      if (matchedItems.length > 0) {
+        itemName = matchedItems[0].item_name;
+        cloverItemId = matchedItems[0].clover_item_id ?? null;
+      }
+    } else if (matchedItems.length > 0) {
+      itemName = matchedItems[0].item_name;
+    }
   }
 
   if (matchedItems.length === 0) {

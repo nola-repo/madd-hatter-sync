@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/page-header";
 import { StatCard, STATUS_COLORS, SYNC_COLORS, crmContactUrl } from "./shared";
+import { Pager, usePagination } from "./pagination";
 
 export type MappingStats = {
   totalCloverCustomers: number;
@@ -144,71 +145,77 @@ export function MappingOverviewTab({
               description="Run 'Sync Clover Data' in Settings to process purchases and match CRM contacts."
             />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                    <th className="pb-2 pr-4 font-medium">Customer</th>
-                    <th className="pb-2 pr-4 font-medium">Email / Phone</th>
-                    <th className="pb-2 pr-4 font-medium">Purchases</th>
-                    <th className="pb-2 pr-4 font-medium">CRM Contact</th>
-                    <th className="pb-2 pr-4 font-medium">Match Method</th>
-                    <th className="pb-2 pr-4 font-medium">Match Status</th>
-                    <th className="pb-2 pr-4 font-medium">Tags</th>
-                    <th className="pb-2 font-medium">Sync</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tableRows.map((c, i) => (
-                    <tr key={i} className="border-b border-border/50">
-                      <td className="py-2.5 pr-4 font-medium text-foreground">{c.customerName}</td>
-                      <td className="py-2.5 pr-4 text-xs text-muted-foreground">
-                        {c.email || c.phone || "—"}
-                      </td>
-                      <td className="py-2.5 pr-4">{c.purchaseCount}</td>
-                      <td className="py-2.5 pr-4">
-                        {c.ghlContactId ? (
-                          <a
-                            href={crmContactUrl(c.ghlContactId)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                          >
-                            {c.ghlContactId.slice(0, 8)}…
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="py-2.5 pr-4 text-xs text-muted-foreground">
-                        {c.matchMethod ?? "—"}
-                      </td>
-                      <td className="py-2.5 pr-4">
-                        <Badge
-                          variant={(STATUS_COLORS[c.matchStatus] as any) ?? "outline"}
-                          className="text-[10px]"
-                        >
-                          {c.matchStatus}
-                        </Badge>
-                      </td>
-                      <td className="py-2.5 pr-4">{c.tagCount}</td>
-                      <td className="py-2.5 pr-4">
-                        <Badge
-                          variant={(SYNC_COLORS[c.syncStatus] as any) ?? "outline"}
-                          className="text-[10px]"
-                        >
-                          {c.syncStatus}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <CustomerTable rows={tableRows} />
           )}
         </CardContent>
       </Card>
     </>
+  );
+}
+
+function CustomerTable({ rows }: { rows: MappingTableRow[] }) {
+  const { page, setPage, totalPages, pagedRows, total } = usePagination(rows);
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border text-left text-xs text-muted-foreground">
+            <th className="pb-2 pr-4 font-medium">Customer</th>
+            <th className="pb-2 pr-4 font-medium">Email / Phone</th>
+            <th className="pb-2 pr-4 font-medium">Purchases</th>
+            <th className="pb-2 pr-4 font-medium">CRM Contact</th>
+            <th className="pb-2 pr-4 font-medium">Match Method</th>
+            <th className="pb-2 pr-4 font-medium">Match Status</th>
+            <th className="pb-2 pr-4 font-medium">Tags</th>
+            <th className="pb-2 font-medium">Sync</th>
+          </tr>
+        </thead>
+        <tbody>
+          {pagedRows.map((c, i) => (
+            <tr key={i} className="border-b border-border/50">
+              <td className="py-2.5 pr-4 font-medium text-foreground">{c.customerName}</td>
+              <td className="py-2.5 pr-4 text-xs text-muted-foreground">
+                {c.email || c.phone || "—"}
+              </td>
+              <td className="py-2.5 pr-4">{c.purchaseCount}</td>
+              <td className="py-2.5 pr-4">
+                {c.ghlContactId ? (
+                  <a
+                    href={crmContactUrl(c.ghlContactId)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                  >
+                    {c.ghlContactId.slice(0, 8)}…
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                ) : (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
+              </td>
+              <td className="py-2.5 pr-4 text-xs text-muted-foreground">{c.matchMethod ?? "—"}</td>
+              <td className="py-2.5 pr-4">
+                <Badge
+                  variant={(STATUS_COLORS[c.matchStatus] as any) ?? "outline"}
+                  className="text-[10px]"
+                >
+                  {c.matchStatus}
+                </Badge>
+              </td>
+              <td className="py-2.5 pr-4">{c.tagCount}</td>
+              <td className="py-2.5 pr-4">
+                <Badge
+                  variant={(SYNC_COLORS[c.syncStatus] as any) ?? "outline"}
+                  className="text-[10px]"
+                >
+                  {c.syncStatus}
+                </Badge>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <Pager page={page} totalPages={totalPages} setPage={setPage} total={total} />
+    </div>
   );
 }

@@ -88,8 +88,9 @@ export async function getCustomerMappingTable(limit = 100): Promise<CustomerMapp
     }
 
     const matchStatus = mapping ? "MATCHED" : hasIdentifiers ? "NO_GHL_MATCH" : "NO_IDENTIFIERS";
-    const syncStatus =
-      tagCount > 0 ? "SYNCED" : matchStatus === "MATCHED" ? "PROCESSED" : "NOT_SYNCED";
+    // A confirmed customer_mappings record = the contact exists in CRM = SYNCED.
+    // Tags are a separate enrichment layer reflected in the Tags column.
+    const syncStatus = mapping ? "SYNCED" : "NOT_SYNCED";
 
     rows.push({
       cloverCustomerId: cid,

@@ -25,18 +25,18 @@ function extractFirstError(raw: unknown): string | null {
     if (Array.isArray(parsed) && parsed.length > 0) {
       // Filter out internal schema mismatch warnings from older runs
       const cleaned = parsed.filter(
-        (e: any) => typeof e === "string" && !e.includes("finish sync_run: Could not find"),
+        (e: any) => typeof e === "string" && !e.includes("Could not find the '"),
       );
       if (cleaned.length > 0) return String(cleaned[0]);
       return null;
     }
     if (typeof parsed === "string") {
-      if (parsed.includes("finish sync_run: Could not find")) return null;
+      if (parsed.includes("Could not find the '")) return null;
       return parsed;
     }
   } catch {
     const s = String(raw);
-    if (s.includes("finish sync_run: Could not find")) return null;
+    if (s.includes("Could not find the '")) return null;
     return s.slice(0, 200);
   }
   return null;
