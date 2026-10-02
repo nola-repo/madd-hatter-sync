@@ -28,7 +28,7 @@ export type CustomerMappingTableResult = {
   skippedNoIdentifiers: number;
 };
 
-export async function getCustomerMappingTable(limit = 100): Promise<CustomerMappingTableResult> {
+export async function getCustomerMappingTable(limit = 1000): Promise<CustomerMappingTableResult> {
   const sb = getSupabaseServer();
   const cfg = getIntegrationConfig();
 

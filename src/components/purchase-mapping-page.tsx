@@ -53,9 +53,9 @@ export function PurchaseMappingPage() {
     try {
       const [s, t, r, sc] = await Promise.all([
         monitorFn(),
-        tableFn({ data: { limit: 100 } }),
+        tableFn({ data: { limit: 1000 } }),
         reviewFn({ data: { limit: 50 } }),
-        syncedFn({ data: { limit: 100 } }),
+        syncedFn({ data: { limit: 1000 } }),
       ]);
       setStats((s as any)?.stats ?? null);
       setTableRows((t as any)?.rows ?? []);

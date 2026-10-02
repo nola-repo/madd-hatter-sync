@@ -211,7 +211,7 @@ export type SyncedContactRow = {
  * Clover customers confidently matched to a CRM contact. These are the
  * "already synced" contacts — the Synced tab reads this.
  */
-export async function getSyncedContacts(limit = 100): Promise<{
+export async function getSyncedContacts(limit = 1000): Promise<{
   total: number;
   contacts: SyncedContactRow[];
 }> {

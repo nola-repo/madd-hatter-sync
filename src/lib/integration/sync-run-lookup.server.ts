@@ -90,6 +90,13 @@ export async function getLastSyncRun(): Promise<{
     };
   }
 
+  // DIAG: dump the raw latest sync_runs row so we can see the exact status +
+  // errors strings before any filtering. Temporary — remove after diagnosis.
+  console.log("[DIAG sync_runs latest row]", {
+    status: data.status,
+    errors: data.errors,
+  });
+
   return {
     runId: data.id,
     status: data.status,
