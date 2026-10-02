@@ -22,10 +22,22 @@ function extractFirstError(raw: unknown): string | null {
   if (!raw) return null;
   try {
     const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-    if (Array.isArray(parsed) && parsed.length > 0) return String(parsed[0]);
-    if (typeof parsed === "string") return parsed;
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      // Filter out internal schema mismatch warnings from older runs
+      const cleaned = parsed.filter(
+        (e: any) => typeof e === "string" && !e.includes("finish sync_run: Could not find"),
+      );
+      if (cleaned.length > 0) return String(cleaned[0]);
+      return null;
+    }
+    if (typeof parsed === "string") {
+      if (parsed.includes("finish sync_run: Could not find")) return null;
+      return parsed;
+    }
   } catch {
-    return String(raw).slice(0, 200);
+    const s = String(raw);
+    if (s.includes("finish sync_run: Could not find")) return null;
+    return s.slice(0, 200);
   }
   return null;
 }
