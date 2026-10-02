@@ -400,7 +400,7 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
     // easily finish in 4–8 seconds, well below the 30s timeout on cron-job.org.
     const maxOrderPages = kind === "incremental" ? 1 : 150;
     const orderPageOpts = {
-      limit: 100,
+      limit: kind === "incremental" ? 50 : 100,
       maxPages: maxOrderPages,
       extraParams: "orderBy=createdTime+DESC",
     };
@@ -425,7 +425,11 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
     recon.ordersFetched = orders.length;
     recon.pagesFetched = pages;
 
+    const startOrderLoop = Date.now();
     for (const order of orders) {
+      if (kind === "incremental" && Date.now() - startOrderLoop > 10000) {
+        break;
+      }
       try {
         const orderRow = await upsertOrderRecord(merchantId, order);
         counters.ordersUpserted += 1;
