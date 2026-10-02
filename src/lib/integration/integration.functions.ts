@@ -647,11 +647,11 @@ export const getMappingMonitorFn = createServerFn({ method: "GET" }).handler(asy
 });
 
 export const getMappingTableFn = createServerFn({ method: "GET" })
-  .validator((data) => z.object({ limit: z.number().min(1).max(500).optional() }).parse(data))
+  .validator((data) => z.object({ limit: z.number().min(1).max(5000).optional() }).parse(data))
   .handler(async ({ data }) => {
     await requireAdmin();
     try {
-      const result = await getCustomerMappingTable(data.limit ?? 100);
+      const result = await getCustomerMappingTable(data.limit ?? 1000);
       return { setupRequired: false as const, ...result };
     } catch (e) {
       if (isSetupRequired(e)) return setupRequiredResponse(e);
@@ -686,11 +686,11 @@ export const processPendingPurchasesFn = createServerFn({ method: "POST" })
   });
 
 export const getSyncedContactsFn = createServerFn({ method: "GET" })
-  .validator((data) => z.object({ limit: z.number().min(1).max(500).optional() }).parse(data))
+  .validator((data) => z.object({ limit: z.number().min(1).max(5000).optional() }).parse(data))
   .handler(async ({ data }) => {
     await requireAdmin();
     try {
-      const result = await getSyncedContacts(data.limit ?? 100);
+      const result = await getSyncedContacts(data.limit ?? 1000);
       return { setupRequired: false as const, ...result };
     } catch (e) {
       if (isSetupRequired(e)) return setupRequiredResponse(e);

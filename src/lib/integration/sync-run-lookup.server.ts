@@ -23,21 +23,12 @@ function extractFirstError(raw: unknown): string | null {
   try {
     const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
     if (Array.isArray(parsed) && parsed.length > 0) {
-      // Filter out internal schema mismatch warnings from older runs
-      const cleaned = parsed.filter(
-        (e: any) => typeof e === "string" && !e.includes("Could not find the '"),
-      );
-      if (cleaned.length > 0) return String(cleaned[0]);
+      if (parsed.length > 0) return String(parsed[0]);
       return null;
     }
-    if (typeof parsed === "string") {
-      if (parsed.includes("Could not find the '")) return null;
-      return parsed;
-    }
+    if (typeof parsed === "string") return parsed;
   } catch {
-    const s = String(raw);
-    if (s.includes("Could not find the '")) return null;
-    return s.slice(0, 200);
+    return String(raw).slice(0, 200);
   }
   return null;
 }
@@ -87,8 +78,6 @@ export async function getLastSyncRun(): Promise<{
       paymentsUpserted: fallback.payments_upserted ?? 0,
       productsUpserted: fallback.products_upserted ?? 0,
       errorMessage: extractFirstError(fallback.errors),
-      _rawStatus: fallback.status,
-      _rawErrors: fallback.errors,
     };
   }
 
@@ -103,7 +92,5 @@ export async function getLastSyncRun(): Promise<{
     paymentsUpserted: data.payments_upserted ?? 0,
     productsUpserted: data.products_upserted ?? 0,
     errorMessage: extractFirstError(data.errors),
-    _rawStatus: data.status,
-    _rawErrors: data.errors,
   };
 }
