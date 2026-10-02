@@ -87,15 +87,10 @@ export async function getLastSyncRun(): Promise<{
       paymentsUpserted: fallback.payments_upserted ?? 0,
       productsUpserted: fallback.products_upserted ?? 0,
       errorMessage: extractFirstError(fallback.errors),
+      _rawStatus: fallback.status,
+      _rawErrors: fallback.errors,
     };
   }
-
-  // DIAG: dump the raw latest sync_runs row so we can see the exact status +
-  // errors strings before any filtering. Temporary — remove after diagnosis.
-  console.log("[DIAG sync_runs latest row]", {
-    status: data.status,
-    errors: data.errors,
-  });
 
   return {
     runId: data.id,
@@ -108,5 +103,7 @@ export async function getLastSyncRun(): Promise<{
     paymentsUpserted: data.payments_upserted ?? 0,
     productsUpserted: data.products_upserted ?? 0,
     errorMessage: extractFirstError(data.errors),
+    _rawStatus: data.status,
+    _rawErrors: data.errors,
   };
 }
