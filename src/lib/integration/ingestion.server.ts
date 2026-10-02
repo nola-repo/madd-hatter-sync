@@ -396,10 +396,9 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
   // 7. Orders — full expansion: lineItems + discounts + modifiers, payments +
   //    refunds, refunds, discounts, customers, serviceCharge, employee.
   await safe("orders", async () => {
-    // In cron/batch mode, cap to a tight number of pages (e.g. 1-2 pages = 100-200 orders)
-    // so the Clover API calls finish in ~2-3 seconds well below the 30s timeout.
-    // `range` is a DateRange object; compare its label, not the object itself.
-    const maxOrderPages = kind === "incremental" ? (range.label === "today" ? 2 : 4) : 150;
+    // In cron/batch mode, cap to 1 page (up to 100 orders) so fetch + line item upserts
+    // easily finish in 4–8 seconds, well below the 30s timeout on cron-job.org.
+    const maxOrderPages = kind === "incremental" ? 1 : 150;
     const orderPageOpts = {
       limit: 100,
       maxPages: maxOrderPages,
@@ -495,42 +494,45 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
     }
   });
 
-  // 8. Standalone payments (for incremental sync, cap to 1 page to save time)
-  await safe("payments", async () => {
-    const { elements: payments } = await cloverPaginate(
-      `/v3/merchants/${merchantId}/payments?expand=tender,cardTransaction${dateFilter}`,
-      { limit: 100, maxPages: kind === "incremental" ? 1 : 20 },
-    );
-    for (const p of payments) {
-      try {
-        await upsertPayment(merchantId, p);
-      } catch (e: any) {
-        errors.push(`payment ${p.id}: ${e?.message ?? String(e)}`);
-      }
-    }
-    counters.paymentsFetched = Math.max(counters.paymentsFetched, payments.length);
-    counters.paymentsUpserted = Math.max(counters.paymentsUpserted, payments.length);
-  });
-
-  // 9. Standalone refunds (for incremental sync, cap to 1 page)
-  await safe("refunds", async () => {
-    try {
-      const { elements: refunds } = await cloverPaginate(
-        `/v3/merchants/${merchantId}/refunds${dateFilter}`,
-        { limit: 100, maxPages: kind === "incremental" ? 1 : 20 },
+  // 8. Standalone payments/refunds are skipped on incremental cron runs because
+  // payments/refunds are already fetched and upserted in step 7 via order expansions.
+  // Skipping them saves 2 extra network round-trips to Clover, keeping execution under 8s.
+  if (kind === "full") {
+    await safe("payments", async () => {
+      const { elements: payments } = await cloverPaginate(
+        `/v3/merchants/${merchantId}/payments?expand=tender,cardTransaction${dateFilter}`,
+        { limit: 100, maxPages: 20 },
       );
-      for (const r of refunds) {
+      for (const p of payments) {
         try {
-          await upsertRefund(merchantId, r);
+          await upsertPayment(merchantId, p);
         } catch (e: any) {
-          errors.push(`refund ${r.id}: ${e?.message ?? String(e)}`);
+          errors.push(`payment ${p.id}: ${e?.message ?? String(e)}`);
         }
       }
-      counters.refundsFetched = Math.max(counters.refundsFetched, refunds.length);
-    } catch {
-      /* /refunds may be unavailable on some plans */
-    }
-  });
+      counters.paymentsFetched = Math.max(counters.paymentsFetched, payments.length);
+      counters.paymentsUpserted = Math.max(counters.paymentsUpserted, payments.length);
+    });
+
+    await safe("refunds", async () => {
+      try {
+        const { elements: refunds } = await cloverPaginate(
+          `/v3/merchants/${merchantId}/refunds${dateFilter}`,
+          { limit: 100, maxPages: 20 },
+        );
+        for (const r of refunds) {
+          try {
+            await upsertRefund(merchantId, r);
+          } catch (e: any) {
+            errors.push(`refund ${r.id}: ${e?.message ?? String(e)}`);
+          }
+        }
+        counters.refundsFetched = Math.max(counters.refundsFetched, refunds.length);
+      } catch {
+        /* /refunds may be unavailable on some plans */
+      }
+    });
+  }
 
   const status: "completed" | "failed" =
     errors.some((e) => e.startsWith("orders:")) && counters.ordersUpserted === 0
