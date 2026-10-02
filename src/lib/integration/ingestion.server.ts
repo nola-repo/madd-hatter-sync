@@ -222,7 +222,8 @@ async function finishSyncRun(runId: string, patch: Record<string, any>) {
   if (patch.crmOrdersHeld !== undefined) row.crm_orders_held = patch.crmOrdersHeld;
   if (patch.crmOrdersErrors !== undefined) row.crm_orders_errors = patch.crmOrdersErrors;
   if (patch.crmContactsCreated !== undefined) row.crm_contacts_created = patch.crmContactsCreated;
-  if (patch.crmPurchaseRecordsCreated !== undefined) row.crm_purchase_records_created = patch.crmPurchaseRecordsCreated;
+  if (patch.crmPurchaseRecordsCreated !== undefined)
+    row.crm_purchase_records_created = patch.crmPurchaseRecordsCreated;
 
   const { error } = await sb.from("sync_runs").update(row).eq("id", runId);
   if (error) {
@@ -691,7 +692,3 @@ export async function runCrmSync(limit?: number): Promise<CrmSyncSummary> {
 
   return out;
 }
-
-// ---- Last sync run lookup ----------------------------------------------
-
-export async function getLastSyncRun(): Promise<{
