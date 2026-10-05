@@ -175,6 +175,7 @@ export type AdminSession = {
 export type ProviderStatus = {
   provider: "clover" | "ghl";
   status: "connected" | "error";
+  identifier?: string | null;
 };
 
 // ---- POS data / dashboard types (browser-safe DTOs) -------------------

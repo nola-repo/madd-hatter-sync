@@ -28,6 +28,7 @@ async function requireAdmin() {
 export const getProviderStatus = createServerFn({ method: "GET" }).handler(async () => {
   await requireAdmin();
   try {
+    const config = getIntegrationConfig();
     // Run both checks in parallel; a failure of one never affects the other.
     const [cloverRes, ghlRes] = await Promise.allSettled([
       checkCloverConnection(),
@@ -39,10 +40,12 @@ export const getProviderStatus = createServerFn({ method: "GET" }).handler(async
         provider: "clover",
         status:
           cloverRes.status === "fulfilled" && cloverRes.value.connected ? "connected" : "error",
+        identifier: config.clover.merchantId || null,
       },
       {
         provider: "ghl",
         status: ghlRes.status === "fulfilled" && ghlRes.value.connected ? "connected" : "error",
+        identifier: config.ghl.locationId || null,
       },
     ];
 

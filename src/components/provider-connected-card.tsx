@@ -41,6 +41,12 @@ export function ProviderConnectedCard() {
     clover: "checking",
     ghl: "checking",
   });
+  const [identifiers, setIdentifiers] = useState<Record<ProviderStatus["provider"], string | null>>(
+    {
+      clover: null,
+      ghl: null,
+    },
+  );
   const [refreshing, setRefreshing] = useState(false);
 
   const loadStatus = useCallback(async () => {
@@ -50,9 +56,16 @@ export function ProviderConnectedCard() {
       const res = await getProviderStatusFn();
       if (res?.setupRequired) return;
       const list = (res as { providers?: ProviderStatus[] }).providers ?? [];
+      const cloverItem = list.find((p) => p.provider === "clover");
+      const ghlItem = list.find((p) => p.provider === "ghl");
+
       setProviders({
-        clover: list.find((p) => p.provider === "clover")?.status ?? "error",
-        ghl: list.find((p) => p.provider === "ghl")?.status ?? "error",
+        clover: cloverItem?.status ?? "error",
+        ghl: ghlItem?.status ?? "error",
+      });
+      setIdentifiers({
+        clover: cloverItem?.identifier ?? null,
+        ghl: ghlItem?.identifier ?? null,
       });
     } catch {
       setProviders({ clover: "error", ghl: "error" });
@@ -81,19 +94,32 @@ export function ProviderConnectedCard() {
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {(["clover", "ghl"] as const).map((key) => (
-          <div
-            key={key}
-            id={`provider-row-${key}`}
-            className="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2.5"
-          >
-            <StatusDot state={providers[key]} />
-            <span className="text-sm font-medium text-foreground">{PROVIDER_LABELS[key]}</span>
-            <span className="ml-auto text-xs text-muted-foreground">
-              {statusLabel(providers[key])}
-            </span>
-          </div>
-        ))}
+        {(["clover", "ghl"] as const).map((key) => {
+          const idLabel = key === "clover" ? "Merchant ID" : "Location ID";
+          const idValue = identifiers[key];
+
+          return (
+            <div
+              key={key}
+              id={`provider-row-${key}`}
+              className="flex flex-col gap-1.5 rounded-md border border-border bg-card px-3 py-2.5 sm:flex-row sm:items-center"
+            >
+              <div className="flex items-center gap-3">
+                <StatusDot state={providers[key]} />
+                <span className="text-sm font-medium text-foreground">{PROVIDER_LABELS[key]}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2 sm:ml-auto">
+                {idValue && (
+                  <span className="inline-flex items-center gap-1.5 rounded border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                    <span className="text-muted-foreground">{idLabel}:</span>
+                    <span className="font-mono">{idValue}</span>
+                  </span>
+                )}
+                <span className="text-xs text-muted-foreground">{statusLabel(providers[key])}</span>
+              </div>
+            </div>
+          );
+        })}
       </CardContent>
     </Card>
   );
