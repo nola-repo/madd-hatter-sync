@@ -17,6 +17,7 @@ import {
   TrendingUp,
   MoreHorizontal,
   User as UserIcon,
+  LogOut,
 } from "lucide-react";
 import { HatIcon } from "./brand-icon";
 import { Button } from "@/components/ui/button";
@@ -237,18 +238,25 @@ export function AdminShell({
           <Settings className="h-4 w-4" />
           Settings
         </Link>
+        <div className="h-px bg-border" />
+        <button
+          type="button"
+          id="user-menu-logout"
+          onClick={() => {
+            setMenuOpen(false);
+            setMobileOpen(false);
+            onLogout();
+          }}
+          className="flex w-full items-center gap-2.5 rounded-sm px-2 py-2 text-left text-sm text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <LogOut className="h-4 w-4" />
+          Log out
+        </button>
       </PopoverContent>
     </Popover>
   );
 
-  const footer = (
-    <div className="mt-auto border-t border-border px-3 py-3">
-      {userChip}
-      {/* onLogout is intentionally retained but unused for now; it can be
-          added as a menu item later. */}
-      {typeof onLogout === "function" ? null : null}
-    </div>
-  );
+  const footer = <div className="mt-auto border-t border-border px-3 py-3">{userChip}</div>;
 
   return (
     <div className="min-h-screen bg-muted/30">

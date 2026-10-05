@@ -7,12 +7,12 @@ export const Route = createFileRoute("/_authenticated/admin/profile")({
       { title: "Profile — Madd Hatter POS Sync" },
       {
         name: "description",
-        content: "Your account and provider connection status.",
+        content: "Your account profile.",
       },
       { property: "og:title", content: "Profile — Madd Hatter POS Sync" },
       {
         property: "og:description",
-        content: "Your account and provider connection status.",
+        content: "Your account profile.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },

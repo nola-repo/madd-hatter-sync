@@ -1,5 +1,6 @@
 import { createFileRoute, Outlet, redirect, useRouter } from "@tanstack/react-router";
 import { adminMe } from "@/lib/integration/auth.functions";
+import { checkAdminApproval } from "@/lib/integration/admin-approval.functions";
 import { AdminShell } from "@/components/admin-shell";
 import { SyncProvider } from "@/hooks/use-sync-context";
 import { useEffect, useState } from "react";
@@ -108,14 +109,34 @@ function AuthLayout() {
     // SSR path: re-check auth on the client where the cookie is sent.
     let cancelled = false;
     setChecking(true);
-    readSessionFromMeRoute().then((session) => {
+    readSessionFromMeRoute().then(async (session) => {
       if (cancelled) return;
-      setChecking(false);
-      if (session) {
-        setClientSession(session);
-      } else {
+      if (!session) {
+        setChecking(false);
         router.navigate({ to: "/login" });
+        return;
       }
+      // Session exists — verify the user is on the admin allowlist.
+      try {
+        const approval = await checkAdminApproval();
+        if (approval?.setupRequired) {
+          setChecking(false);
+          router.navigate({ to: "/login" });
+          return;
+        }
+        if (!approval?.approved) {
+          setChecking(false);
+          router.navigate({ to: "/pending-approval" });
+          return;
+        }
+      } catch {
+        // Fail closed: if the allowlist check errors, do not grant access.
+        setChecking(false);
+        router.navigate({ to: "/pending-approval" });
+        return;
+      }
+      setChecking(false);
+      setClientSession(session);
     });
     return () => {
       cancelled = true;

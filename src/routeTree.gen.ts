@@ -12,6 +12,8 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as PendingApprovalRouteImport } from './routes/pending-approval'
+import { Route as RegisterRouteImport } from './routes/register'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as ApiDiagRouteImport } from './routes/api/diag'
 import { Route as ApiSyncRouteImport } from './routes/api/sync'
@@ -36,6 +38,7 @@ import { Route as AuthenticatedAdminTransactionsRouteImport } from './routes/_au
 import { Route as ApiAuthLoginRouteImport } from './routes/api/auth/login'
 import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
 import { Route as ApiAuthMeRouteImport } from './routes/api/auth/me'
+import { Route as ApiAuthRegisterRouteImport } from './routes/api/auth/register'
 import { Route as ApiSyncHistoricalCustomersRouteImport } from './routes/api/sync/historical-customers'
 
 const IndexRoute = IndexRouteImport.update({
@@ -50,6 +53,16 @@ const AuthenticatedRoute = AuthenticatedRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PendingApprovalRoute = PendingApprovalRouteImport.update({
+  id: '/pending-approval',
+  path: '/pending-approval',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RegisterRoute = RegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
@@ -186,6 +199,11 @@ const ApiAuthMeRoute = ApiAuthMeRouteImport.update({
   path: '/api/auth/me',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthRegisterRoute = ApiAuthRegisterRouteImport.update({
+  id: '/api/auth/register',
+  path: '/api/auth/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiSyncHistoricalCustomersRoute =
   ApiSyncHistoricalCustomersRouteImport.update({
     id: '/historical-customers',
@@ -196,6 +214,8 @@ const ApiSyncHistoricalCustomersRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/pending-approval': typeof PendingApprovalRoute
+  '/register': typeof RegisterRoute
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/api/diag': typeof ApiDiagRoute
   '/api/sync': typeof ApiSyncRouteWithChildren
@@ -219,12 +239,15 @@ export interface FileRoutesByFullPath {
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/me': typeof ApiAuthMeRoute
+  '/api/auth/register': typeof ApiAuthRegisterRoute
   '/api/sync/historical-customers': typeof ApiSyncHistoricalCustomersRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/pending-approval': typeof PendingApprovalRoute
+  '/register': typeof RegisterRoute
   '/api/diag': typeof ApiDiagRoute
   '/api/sync': typeof ApiSyncRouteWithChildren
   '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
@@ -247,6 +270,7 @@ export interface FileRoutesByTo {
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/me': typeof ApiAuthMeRoute
+  '/api/auth/register': typeof ApiAuthRegisterRoute
   '/api/sync/historical-customers': typeof ApiSyncHistoricalCustomersRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
 }
@@ -255,6 +279,8 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/login': typeof LoginRoute
+  '/pending-approval': typeof PendingApprovalRoute
+  '/register': typeof RegisterRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/api/diag': typeof ApiDiagRoute
   '/api/sync': typeof ApiSyncRouteWithChildren
@@ -278,6 +304,7 @@ export interface FileRoutesById {
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/me': typeof ApiAuthMeRoute
+  '/api/auth/register': typeof ApiAuthRegisterRoute
   '/api/sync/historical-customers': typeof ApiSyncHistoricalCustomersRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
 }
@@ -286,6 +313,8 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/pending-approval'
+    | '/register'
     | '/admin'
     | '/api/diag'
     | '/api/sync'
@@ -309,12 +338,15 @@ export interface FileRouteTypes {
     | '/api/auth/login'
     | '/api/auth/logout'
     | '/api/auth/me'
+    | '/api/auth/register'
     | '/api/sync/historical-customers'
     | '/admin/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
+    | '/pending-approval'
+    | '/register'
     | '/api/diag'
     | '/api/sync'
     | '/admin/analytics'
@@ -337,6 +369,7 @@ export interface FileRouteTypes {
     | '/api/auth/login'
     | '/api/auth/logout'
     | '/api/auth/me'
+    | '/api/auth/register'
     | '/api/sync/historical-customers'
     | '/admin'
   id:
@@ -344,6 +377,8 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/login'
+    | '/pending-approval'
+    | '/register'
     | '/_authenticated/admin'
     | '/api/diag'
     | '/api/sync'
@@ -367,6 +402,7 @@ export interface FileRouteTypes {
     | '/api/auth/login'
     | '/api/auth/logout'
     | '/api/auth/me'
+    | '/api/auth/register'
     | '/api/sync/historical-customers'
     | '/_authenticated/admin/'
   fileRoutesById: FileRoutesById
@@ -375,11 +411,14 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   LoginRoute: typeof LoginRoute
+  PendingApprovalRoute: typeof PendingApprovalRoute
+  RegisterRoute: typeof RegisterRoute
   ApiDiagRoute: typeof ApiDiagRoute
   ApiSyncRoute: typeof ApiSyncRouteWithChildren
   ApiAuthLoginRoute: typeof ApiAuthLoginRoute
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
   ApiAuthMeRoute: typeof ApiAuthMeRoute
+  ApiAuthRegisterRoute: typeof ApiAuthRegisterRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -403,6 +442,20 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pending-approval': {
+      id: '/pending-approval'
+      path: '/pending-approval'
+      fullPath: '/pending-approval'
+      preLoaderRoute: typeof PendingApprovalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/register': {
+      id: '/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof RegisterRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/admin': {
@@ -573,6 +626,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthMeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/register': {
+      id: '/api/auth/register'
+      path: '/api/auth/register'
+      fullPath: '/api/auth/register'
+      preLoaderRoute: typeof ApiAuthRegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/sync/historical-customers': {
       id: '/api/sync/historical-customers'
       path: '/historical-customers'
@@ -657,11 +717,14 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   LoginRoute: LoginRoute,
+  PendingApprovalRoute: PendingApprovalRoute,
+  RegisterRoute: RegisterRoute,
   ApiDiagRoute: ApiDiagRoute,
   ApiSyncRoute: ApiSyncRouteWithChildren,
   ApiAuthLoginRoute: ApiAuthLoginRoute,
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,
   ApiAuthMeRoute: ApiAuthMeRoute,
+  ApiAuthRegisterRoute: ApiAuthRegisterRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -1,5 +1,6 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -169,6 +170,12 @@ function LoginPage() {
               Sign in
             </Button>
           </form>
+          <p className="mt-4 text-center text-sm text-muted-foreground">
+            Don't have an account?{" "}
+            <Link to="/register" className="font-medium text-primary hover:underline">
+              Register
+            </Link>
+          </p>
 
           <div className="mt-4 border-t pt-4">
             <Button
