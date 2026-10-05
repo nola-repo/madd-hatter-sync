@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { isSetupRequired, getMissingSecrets } from "@/lib/integration/config.server";
-import { getSupabaseAnon } from "@/lib/integration/supabase.server";
+import { getSupabaseAnon, getSupabaseServer } from "@/lib/integration/supabase.server";
 import { buildSessionCookie } from "@/lib/integration/auth.server";
 
 export const Route = createFileRoute("/api/auth/register")({
@@ -38,6 +38,18 @@ export const Route = createFileRoute("/api/auth/register")({
               status: 200,
               headers: { "content-type": "application/json" },
             });
+          }
+
+          // Auto-insert row into admin_users (auto-approved for super admin)
+          try {
+            const sbAdmin = getSupabaseServer();
+            await sbAdmin.from("admin_users").upsert({
+              user_id: data.user.id,
+              email: parsed.email.trim().toLowerCase(),
+              approved: parsed.email.trim().toLowerCase() === "monzydave13@gmail.com",
+            });
+          } catch {
+            // non-fatal if table does not exist yet
           }
 
           return new Response(JSON.stringify({ ok: true, requiresConfirmation: false }), {

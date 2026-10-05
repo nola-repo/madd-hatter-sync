@@ -3,6 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { isSetupRequired, getMissingSecrets } from "./config.server";
 import { getAdminSession } from "./auth.server";
 import { getSupabaseServer } from "./supabase.server";
+import { isSuperAdminEmail } from "./super-admin";
 
 function setupRequiredResponse(e: unknown) {
   return {
@@ -23,6 +24,12 @@ export const checkAdminApproval = createServerFn({ method: "GET" }).handler(asyn
     if (!session) {
       return { setupRequired: false as const, approved: false, signedIn: false };
     }
+
+    // Super admin is always automatically approved without manual SQL needed
+    if (isSuperAdminEmail(session.user?.email)) {
+      return { setupRequired: false as const, approved: true, signedIn: true };
+    }
+
     const sb = getSupabaseServer();
     const { data, error } = await sb
       .from("admin_users")
