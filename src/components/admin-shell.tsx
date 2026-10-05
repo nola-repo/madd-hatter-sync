@@ -10,16 +10,18 @@ import {
   SlidersHorizontal,
   Users,
   Settings,
-  LogOut,
   Menu,
   X,
   ChevronDown,
   Receipt,
   TrendingUp,
+  MoreHorizontal,
+  User as UserIcon,
 } from "lucide-react";
 import { HatIcon } from "./brand-icon";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 type NavLeaf = { to: string; label: string; icon: React.ComponentType<{ className?: string }> };
 type NavGroup = {
@@ -66,7 +68,6 @@ const NAV: NavEntry[] = [
   { to: "/admin/product-mapping", label: "Product Mapping", icon: Package },
   { to: "/admin/purchase-mapping", label: "Purchase Mapping", icon: Tag },
   { to: "/admin/logs", label: "Sync Logs", icon: Receipt },
-  { to: "/admin/settings", label: "Settings", icon: Settings },
 ];
 
 // Routes that exist as real pages vs "coming soon" placeholders.
@@ -83,6 +84,7 @@ export function AdminShell({
 }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   // Expand a group if any child is active.
   const initiallyExpanded = NAV.map((e, i) =>
     isGroup(e) && e.children.some((c) => pathname.startsWith(c.to)) ? i : -1,
@@ -184,17 +186,67 @@ export function AdminShell({
     </Link>
   );
 
-  const footer = (
-    <div className="mt-auto border-t border-border px-3 py-4">
-      {email && (
-        <div className="mb-2 truncate px-2 text-xs text-muted-foreground" title={email}>
-          {email}
+  const initial = (email ?? "?").trim().charAt(0).toUpperCase() || "?";
+
+  const userChip = (
+    <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+      <PopoverTrigger asChild>
+        <button
+          id="sidebar-user-chip"
+          type="button"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          aria-label="Open user menu"
+          className="flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted"
+        >
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+            {initial}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
+            {email ?? "User"}
+          </span>
+          <MoreHorizontal className="h-4 w-4 shrink-0 text-muted-foreground" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent side="top" align="start" sideOffset={6} className="w-60 p-1.5">
+        <div className="truncate px-2 py-1.5 text-[11px] text-muted-foreground" title={email ?? ""}>
+          {email ?? ""}
         </div>
-      )}
-      <Button variant="outline" size="sm" className="w-full justify-start" onClick={onLogout}>
-        <LogOut className="mr-2 h-3.5 w-3.5" />
-        Sign out
-      </Button>
+        <div className="h-px bg-border" />
+        <Link
+          to="/admin/profile"
+          id="user-menu-profile"
+          onClick={() => {
+            setMenuOpen(false);
+            setMobileOpen(false);
+          }}
+          className="flex items-center gap-2.5 rounded-sm px-2 py-2 text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <UserIcon className="h-4 w-4" />
+          Profile
+        </Link>
+        <Link
+          to="/admin/settings"
+          id="user-menu-settings"
+          onClick={() => {
+            setMenuOpen(false);
+            setMobileOpen(false);
+          }}
+          className="flex items-center gap-2.5 rounded-sm px-2 py-2 text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Settings className="h-4 w-4" />
+          Settings
+        </Link>
+      </PopoverContent>
+    </Popover>
+  );
+
+  const footer = (
+    <div className="mt-auto border-t border-border px-3 py-3">
+      {userChip}
+      {/* onLogout is intentionally retained but unused for now; it can be
+          added as a menu item later. */}
+      {typeof onLogout === "function" ? null : null}
     </div>
   );
 

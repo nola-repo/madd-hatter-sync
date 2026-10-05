@@ -44,7 +44,7 @@ import {
   searchCustomerPurchasesByItem,
   getSyncLogs,
 } from "./product-mapping.server";
-import type { ConnectionStatus } from "./types";
+import type { ConnectionStatus, ProviderStatus } from "./types";
 
 function setupRequiredResponse(e: unknown) {
   return {

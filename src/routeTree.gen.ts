@@ -28,6 +28,7 @@ import { Route as AuthenticatedAdminOrdersRouteImport } from './routes/_authenti
 import { Route as AuthenticatedAdminPosDataRouteImport } from './routes/_authenticated/admin.pos-data'
 import { Route as AuthenticatedAdminProductMappingRouteImport } from './routes/_authenticated/admin.product-mapping'
 import { Route as AuthenticatedAdminProductsRouteImport } from './routes/_authenticated/admin.products'
+import { Route as AuthenticatedAdminProfileRouteImport } from './routes/_authenticated/admin.profile'
 import { Route as AuthenticatedAdminPurchaseMappingRouteImport } from './routes/_authenticated/admin.purchase-mapping'
 import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin.settings'
 import { Route as AuthenticatedAdminSetupRouteImport } from './routes/_authenticated/admin.setup'
@@ -141,6 +142,12 @@ const AuthenticatedAdminProductsRoute =
     path: '/products',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminProfileRoute =
+  AuthenticatedAdminProfileRouteImport.update({
+    id: '/profile',
+    path: '/profile',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminPurchaseMappingRoute =
   AuthenticatedAdminPurchaseMappingRouteImport.update({
     id: '/purchase-mapping',
@@ -204,6 +211,7 @@ export interface FileRoutesByFullPath {
   '/admin/pos-data': typeof AuthenticatedAdminPosDataRoute
   '/admin/product-mapping': typeof AuthenticatedAdminProductMappingRoute
   '/admin/products': typeof AuthenticatedAdminProductsRoute
+  '/admin/profile': typeof AuthenticatedAdminProfileRoute
   '/admin/purchase-mapping': typeof AuthenticatedAdminPurchaseMappingRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/setup': typeof AuthenticatedAdminSetupRoute
@@ -231,6 +239,7 @@ export interface FileRoutesByTo {
   '/admin/pos-data': typeof AuthenticatedAdminPosDataRoute
   '/admin/product-mapping': typeof AuthenticatedAdminProductMappingRoute
   '/admin/products': typeof AuthenticatedAdminProductsRoute
+  '/admin/profile': typeof AuthenticatedAdminProfileRoute
   '/admin/purchase-mapping': typeof AuthenticatedAdminPurchaseMappingRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/setup': typeof AuthenticatedAdminSetupRoute
@@ -261,6 +270,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/pos-data': typeof AuthenticatedAdminPosDataRoute
   '/_authenticated/admin/product-mapping': typeof AuthenticatedAdminProductMappingRoute
   '/_authenticated/admin/products': typeof AuthenticatedAdminProductsRoute
+  '/_authenticated/admin/profile': typeof AuthenticatedAdminProfileRoute
   '/_authenticated/admin/purchase-mapping': typeof AuthenticatedAdminPurchaseMappingRoute
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/_authenticated/admin/setup': typeof AuthenticatedAdminSetupRoute
@@ -291,6 +301,7 @@ export interface FileRouteTypes {
     | '/admin/pos-data'
     | '/admin/product-mapping'
     | '/admin/products'
+    | '/admin/profile'
     | '/admin/purchase-mapping'
     | '/admin/settings'
     | '/admin/setup'
@@ -318,6 +329,7 @@ export interface FileRouteTypes {
     | '/admin/pos-data'
     | '/admin/product-mapping'
     | '/admin/products'
+    | '/admin/profile'
     | '/admin/purchase-mapping'
     | '/admin/settings'
     | '/admin/setup'
@@ -347,6 +359,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/pos-data'
     | '/_authenticated/admin/product-mapping'
     | '/_authenticated/admin/products'
+    | '/_authenticated/admin/profile'
     | '/_authenticated/admin/purchase-mapping'
     | '/_authenticated/admin/settings'
     | '/_authenticated/admin/setup'
@@ -504,6 +517,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminProductsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/profile': {
+      id: '/_authenticated/admin/profile'
+      path: '/profile'
+      fullPath: '/admin/profile'
+      preLoaderRoute: typeof AuthenticatedAdminProfileRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/purchase-mapping': {
       id: '/_authenticated/admin/purchase-mapping'
       path: '/purchase-mapping'
@@ -576,6 +596,7 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminPosDataRoute: typeof AuthenticatedAdminPosDataRoute
   AuthenticatedAdminProductMappingRoute: typeof AuthenticatedAdminProductMappingRoute
   AuthenticatedAdminProductsRoute: typeof AuthenticatedAdminProductsRoute
+  AuthenticatedAdminProfileRoute: typeof AuthenticatedAdminProfileRoute
   AuthenticatedAdminPurchaseMappingRoute: typeof AuthenticatedAdminPurchaseMappingRoute
   AuthenticatedAdminSettingsRoute: typeof AuthenticatedAdminSettingsRoute
   AuthenticatedAdminSetupRoute: typeof AuthenticatedAdminSetupRoute
@@ -597,6 +618,7 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminPosDataRoute: AuthenticatedAdminPosDataRoute,
   AuthenticatedAdminProductMappingRoute: AuthenticatedAdminProductMappingRoute,
   AuthenticatedAdminProductsRoute: AuthenticatedAdminProductsRoute,
+  AuthenticatedAdminProfileRoute: AuthenticatedAdminProfileRoute,
   AuthenticatedAdminPurchaseMappingRoute:
     AuthenticatedAdminPurchaseMappingRoute,
   AuthenticatedAdminSettingsRoute: AuthenticatedAdminSettingsRoute,

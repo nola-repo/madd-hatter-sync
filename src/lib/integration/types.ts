@@ -170,6 +170,13 @@ export type AdminSession = {
   email: string;
 } | null;
 
+// ---- Provider status (slim, no payloads) -------------------------------
+
+export type ProviderStatus = {
+  provider: "clover" | "ghl";
+  status: "connected" | "error";
+};
+
 // ---- POS data / dashboard types (browser-safe DTOs) -------------------
 
 export type ListResult<T> = {
