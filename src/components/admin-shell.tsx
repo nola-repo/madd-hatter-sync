@@ -18,11 +18,13 @@ import {
   MoreHorizontal,
   User as UserIcon,
   LogOut,
+  UserCog,
 } from "lucide-react";
 import { HatIcon } from "./brand-icon";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { isSuperAdminEmail } from "@/lib/integration/super-admin";
 
 type NavLeaf = { to: string; label: string; icon: React.ComponentType<{ className?: string }> };
 type NavGroup = {
@@ -238,6 +240,20 @@ export function AdminShell({
           <Settings className="h-4 w-4" />
           Settings
         </Link>
+        {isSuperAdminEmail(email) && (
+          <Link
+            to="/admin/user-management"
+            id="user-menu-user-management"
+            onClick={() => {
+              setMenuOpen(false);
+              setMobileOpen(false);
+            }}
+            className="flex items-center gap-2.5 rounded-sm px-2 py-2 text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <UserCog className="h-4 w-4" />
+            User Management
+          </Link>
+        )}
         <div className="h-px bg-border" />
         <button
           type="button"
