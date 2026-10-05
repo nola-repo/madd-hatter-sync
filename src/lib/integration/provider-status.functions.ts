@@ -5,7 +5,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { checkCloverConnection } from "./clover.server";
 import { checkGhlConnection } from "./ghl.server";
-import { isSetupRequired, getMissingSecrets } from "./config.server";
+import { getIntegrationConfig, isSetupRequired, getMissingSecrets } from "./config.server";
 import { getAdminSession } from "./auth.server";
 import type { ProviderStatus } from "./types";
 

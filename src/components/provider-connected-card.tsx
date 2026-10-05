@@ -102,19 +102,19 @@ export function ProviderConnectedCard() {
             <div
               key={key}
               id={`provider-row-${key}`}
-              className="flex flex-col gap-1.5 rounded-md border border-border bg-card px-3 py-2.5 sm:flex-row sm:items-center"
+              className="flex flex-col gap-2 rounded-md border border-border bg-card px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
             >
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <StatusDot state={providers[key]} />
                 <span className="text-sm font-medium text-foreground">{PROVIDER_LABELS[key]}</span>
-              </div>
-              <div className="flex items-center justify-between gap-2 sm:ml-auto">
                 {idValue && (
-                  <span className="inline-flex items-center gap-1.5 rounded border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                    <span className="text-muted-foreground">{idLabel}:</span>
-                    <span className="font-mono">{idValue}</span>
+                  <span className="inline-flex items-center gap-1.5 rounded border border-primary/30 bg-primary/15 px-2 py-0.5 text-xs font-semibold text-primary shadow-xs">
+                    <span className="opacity-75">{idLabel}:</span>
+                    <span className="font-mono tracking-wide">{idValue}</span>
                   </span>
                 )}
+              </div>
+              <div className="flex items-center sm:ml-auto">
                 <span className="text-xs text-muted-foreground">{statusLabel(providers[key])}</span>
               </div>
             </div>
