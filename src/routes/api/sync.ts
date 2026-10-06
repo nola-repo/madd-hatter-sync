@@ -5,6 +5,7 @@ import { processPendingPurchases } from "@/lib/integration/purchase-ops.server";
 import { backfillStrandedCustomers } from "@/lib/integration/customer-backfill.server";
 import { getIntegrationConfig } from "@/lib/integration/config.server";
 import { getSupabaseServer } from "@/lib/integration/supabase.server";
+import { ensureMigrations } from "@/lib/integration/migration-runner.server";
 
 // -------------------------------------------------------------------------
 // /api/sync — Server-to-server sync entry point.
@@ -57,6 +58,16 @@ export const Route = createFileRoute("/api/sync")({
         if (secret !== expectedSecret) {
           return Response.json({ error: "Unauthorized" }, { status: 401 });
         }
+
+        // Ensure the database schema is fully migrated before any sync work.
+        // This runs all pending migrations (0001–0011) automatically and is a
+        // no-op once they are applied. It is cheap (one SELECT) and cached per
+        // worker isolate, so it adds negligible latency to subsequent cron ticks.
+        // If the one-time bootstrap (supabase/bootstrap.sql) hasn't been run yet,
+        // this logs the issue and continues — sync will still attempt its work.
+        await ensureMigrations().catch((e) =>
+          console.warn("[sync] migration runner skipped:", e?.message ?? String(e)),
+        );
 
         // Dynamic batch limit: env SYNC_BATCH_LIMIT (up to 100) for backfill ramp-up.
         const envBatch = process.env.SYNC_BATCH_LIMIT
@@ -114,6 +125,10 @@ export const Route = createFileRoute("/api/sync")({
 
       // ---- POST: Clover webhook events -----------------------------
       POST: async ({ request }) => {
+        // Ensure schema is migrated before any DB write (same as GET).
+        await ensureMigrations().catch((e) =>
+          console.warn("[sync] migration runner skipped (POST):", e?.message ?? String(e)),
+        );
         try {
           const cfg = getIntegrationConfig();
 

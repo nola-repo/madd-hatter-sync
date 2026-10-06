@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { backfillStrandedCustomers } from "@/lib/integration/customer-backfill.server";
+import { ensureMigrations } from "@/lib/integration/migration-runner.server";
 
 // -------------------------------------------------------------------------
 // POST /api/sync/historical-customers
@@ -60,6 +61,10 @@ async function handleBackfill(request: Request): Promise<Response> {
   const limit = limitParam ? parseInt(limitParam, 10) : undefined;
 
   try {
+    // Ensure schema is migrated before any DB read/write.
+    await ensureMigrations().catch((e) =>
+      console.warn("[backfill] migration runner skipped:", e?.message ?? String(e)),
+    );
     console.log("[backfill] starting customer-first bulk backfill...");
     const summary = await backfillStrandedCustomers(limit, 18_000);
     const ok = summary.errors.length === 0;
