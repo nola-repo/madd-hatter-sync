@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { sendEmail } from "@/lib/integration/email.server";
-import { SUPER_ADMIN_EMAIL } from "@/lib/integration/super-admin";
+import { sendEmail } from "../../lib/integration/email.server";
+import { SUPER_ADMIN_EMAIL } from "../../lib/integration/super-admin";
 
 // Diagnostic endpoint: tests the Resend email pipeline end-to-end and returns
 // the result to the browser so we can see why registration emails aren't
