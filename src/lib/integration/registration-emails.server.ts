@@ -7,6 +7,10 @@
 // Dedup: we stamp admin_users.welcome_email_sent_at / approval_alert_sent_at
 // after a successful send, and skip if already set — so a retry or double
 // submit never sends duplicates.
+//
+// Resilience: if the dedup columns (migration 0012) or the admin_users table
+// itself don't exist yet, the dedup checks degrade gracefully to "not sent"
+// so the email still goes out instead of being silently swallowed.
 
 import { getSupabaseServer } from "./supabase.server";
 import { isSuperAdminEmail, SUPER_ADMIN_EMAIL } from "./super-admin";
@@ -22,6 +26,55 @@ function appBaseUrl(): string {
     /\/$/,
     "",
   );
+}
+
+/**
+ * Check whether a dedup timestamp column already has a value for this user.
+ * Returns false if the table/column doesn't exist or the row is missing —
+ * so a missing migration never blocks the email from being sent.
+ */
+async function alreadySent(
+  userId: string,
+  column: "welcome_email_sent_at" | "approval_alert_sent_at" | "approved_email_sent_at",
+): Promise<boolean> {
+  try {
+    const sb = getSupabaseServer();
+    const { data, error } = await sb
+      .from("admin_users")
+      .select(column)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) {
+      // Column or table missing — treat as "not sent" so we still send.
+      return false;
+    }
+    return Boolean(data?.[column]);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Stamp a dedup timestamp after a successful send. Swallows all errors —
+ * a failure to update the timestamp never breaks the flow.
+ */
+async function stampSent(
+  userId: string,
+  column: "welcome_email_sent_at" | "approval_alert_sent_at" | "approved_email_sent_at",
+): Promise<void> {
+  try {
+    const sb = getSupabaseServer();
+    await sb
+      .from("admin_users")
+      .update({ [column]: new Date().toISOString() })
+      .eq("user_id", userId)
+      .then(
+        () => {},
+        () => {},
+      );
+  } catch {
+    // ignore — non-fatal
+  }
 }
 
 /**
@@ -43,7 +96,6 @@ export async function sendRegistrationNotifications(input: {
     return { welcome: "skipped", alert: "skipped" };
   }
 
-  const sb = getSupabaseServer();
   const baseUrl = appBaseUrl();
   const signInUrl = `${baseUrl}/login`;
   const approveUrl = `${baseUrl}/admin/user-management`;
@@ -52,13 +104,7 @@ export async function sendRegistrationNotifications(input: {
   // ---- 1. Welcome / awaiting-approval email to the new user ----
   let welcome: "sent" | "skipped" | "failed" = "skipped";
   try {
-    const { data: existing } = await sb
-      .from("admin_users")
-      .select("welcome_email_sent_at")
-      .eq("user_id", input.userId)
-      .maybeSingle();
-
-    if (existing?.welcome_email_sent_at) {
+    if (await alreadySent(input.userId, "welcome_email_sent_at")) {
       welcome = "skipped";
     } else {
       const tpl = welcomeAwaitingApprovalEmail({
@@ -76,14 +122,7 @@ export async function sendRegistrationNotifications(input: {
       });
       if (res.ok) {
         welcome = "sent";
-        await sb
-          .from("admin_users")
-          .update({ welcome_email_sent_at: new Date().toISOString() })
-          .eq("user_id", input.userId)
-          .then(
-            () => {},
-            () => {},
-          );
+        await stampSent(input.userId, "welcome_email_sent_at");
       } else if (res.skipped) {
         welcome = "skipped";
         console.warn("[registration] welcome email skipped:", res.reason);
@@ -104,13 +143,7 @@ export async function sendRegistrationNotifications(input: {
       (process.env.SUPER_ADMIN_EMAIL ?? SUPER_ADMIN_EMAIL).trim().toLowerCase() ||
       SUPER_ADMIN_EMAIL;
 
-    const { data: existing } = await sb
-      .from("admin_users")
-      .select("approval_alert_sent_at")
-      .eq("user_id", input.userId)
-      .maybeSingle();
-
-    if (existing?.approval_alert_sent_at) {
+    if (await alreadySent(input.userId, "approval_alert_sent_at")) {
       alert = "skipped";
     } else {
       const tpl = newApprovalAlertEmail({
@@ -128,14 +161,7 @@ export async function sendRegistrationNotifications(input: {
       });
       if (res.ok) {
         alert = "sent";
-        await sb
-          .from("admin_users")
-          .update({ approval_alert_sent_at: new Date().toISOString() })
-          .eq("user_id", input.userId)
-          .then(
-            () => {},
-            () => {},
-          );
+        await stampSent(input.userId, "approval_alert_sent_at");
       } else if (res.skipped) {
         alert = "skipped";
         console.warn("[registration] super admin alert skipped:", res.reason);
@@ -154,6 +180,7 @@ export async function sendRegistrationNotifications(input: {
 
 /**
  * Send an email notifying the user that their account has been approved.
+ * Includes dedup via approved_email_sent_at so a re-approval doesn't spam.
  */
 export async function sendApprovalNotification(input: {
   email: string;
@@ -177,6 +204,43 @@ export async function sendApprovalNotification(input: {
     return res.ok;
   } catch (e) {
     console.error("[approval] notification failed:", (e as Error)?.message ?? e);
+    return false;
+  }
+}
+
+/**
+ * Send the "your account is approved" email with dedup.
+ * Called by the User Management page when the super admin approves a user.
+ */
+export async function sendAccountApprovedEmail(input: {
+  userId: string;
+  email: string;
+  fullName: string;
+}): Promise<boolean> {
+  try {
+    if (await alreadySent(input.userId, "approved_email_sent_at")) {
+      return true; // already sent
+    }
+    const baseUrl = appBaseUrl();
+    const signInUrl = `${baseUrl}/login`;
+    const tpl = accountApprovedEmail({
+      fullName: input.fullName,
+      email: input.email,
+      signInUrl,
+    });
+    const res = await sendEmail({
+      to: input.email,
+      subject: tpl.subject,
+      html: tpl.html,
+      text: tpl.text,
+      fromName: "Madd Hatter Sync",
+    });
+    if (res.ok) {
+      await stampSent(input.userId, "approved_email_sent_at");
+    }
+    return res.ok;
+  } catch (e) {
+    console.error("[approval] account approved email failed:", (e as Error)?.message ?? e);
     return false;
   }
 }
