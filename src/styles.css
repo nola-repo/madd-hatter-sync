@@ -190,7 +190,9 @@
     -5px -5px 12px color-mix(in oklab, white 55%, transparent),
     8px 8px 18px color-mix(in oklab, var(--clay-primary) 55%, transparent),
     inset 0 2px 3px color-mix(in oklab, white 30%, transparent);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
 }
 @utility clay-button {
   &:hover {
