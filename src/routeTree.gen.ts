@@ -17,6 +17,7 @@ import { Route as RegisterRouteImport } from './routes/register'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as ApiDiagRouteImport } from './routes/api/diag'
 import { Route as ApiSyncRouteImport } from './routes/api/sync'
+import { Route as ApiTestEmailRouteImport } from './routes/api/test-email'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
 import { Route as AuthenticatedAdminAnalyticsRouteImport } from './routes/_authenticated/admin.analytics'
 import { Route as AuthenticatedAdminCategoriesRouteImport } from './routes/_authenticated/admin.categories'
@@ -79,6 +80,11 @@ const ApiDiagRoute = ApiDiagRouteImport.update({
 const ApiSyncRoute = ApiSyncRouteImport.update({
   id: '/api/sync',
   path: '/api/sync',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiTestEmailRoute = ApiTestEmailRouteImport.update({
+  id: '/api/test-email',
+  path: '/api/test-email',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAdminIndexRoute = AuthenticatedAdminIndexRouteImport.update({
@@ -226,6 +232,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/api/diag': typeof ApiDiagRoute
   '/api/sync': typeof ApiSyncRouteWithChildren
+  '/api/test-email': typeof ApiTestEmailRoute
   '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/admin/categories': typeof AuthenticatedAdminCategoriesRoute
   '/admin/customer-purchases': typeof AuthenticatedAdminCustomerPurchasesRoute
@@ -258,6 +265,7 @@ export interface FileRoutesByTo {
   '/register': typeof RegisterRoute
   '/api/diag': typeof ApiDiagRoute
   '/api/sync': typeof ApiSyncRouteWithChildren
+  '/api/test-email': typeof ApiTestEmailRoute
   '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/admin/categories': typeof AuthenticatedAdminCategoriesRoute
   '/admin/customer-purchases': typeof AuthenticatedAdminCustomerPurchasesRoute
@@ -293,6 +301,7 @@ export interface FileRoutesById {
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/api/diag': typeof ApiDiagRoute
   '/api/sync': typeof ApiSyncRouteWithChildren
+  '/api/test-email': typeof ApiTestEmailRoute
   '/_authenticated/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/_authenticated/admin/categories': typeof AuthenticatedAdminCategoriesRoute
   '/_authenticated/admin/customer-purchases': typeof AuthenticatedAdminCustomerPurchasesRoute
@@ -328,6 +337,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/api/diag'
     | '/api/sync'
+    | '/api/test-email'
     | '/admin/analytics'
     | '/admin/categories'
     | '/admin/customer-purchases'
@@ -360,6 +370,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/api/diag'
     | '/api/sync'
+    | '/api/test-email'
     | '/admin/analytics'
     | '/admin/categories'
     | '/admin/customer-purchases'
@@ -394,6 +405,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin'
     | '/api/diag'
     | '/api/sync'
+    | '/api/test-email'
     | '/_authenticated/admin/analytics'
     | '/_authenticated/admin/categories'
     | '/_authenticated/admin/customer-purchases'
@@ -428,6 +440,7 @@ export interface RootRouteChildren {
   RegisterRoute: typeof RegisterRoute
   ApiDiagRoute: typeof ApiDiagRoute
   ApiSyncRoute: typeof ApiSyncRouteWithChildren
+  ApiTestEmailRoute: typeof ApiTestEmailRoute
   ApiAuthLoginRoute: typeof ApiAuthLoginRoute
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
   ApiAuthMeRoute: typeof ApiAuthMeRoute
@@ -490,6 +503,13 @@ declare module '@tanstack/react-router' {
       path: '/api/sync'
       fullPath: '/api/sync'
       preLoaderRoute: typeof ApiSyncRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/test-email': {
+      id: '/api/test-email'
+      path: '/api/test-email'
+      fullPath: '/api/test-email'
+      preLoaderRoute: typeof ApiTestEmailRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/admin/': {
@@ -743,6 +763,7 @@ const rootRouteChildren: RootRouteChildren = {
   RegisterRoute: RegisterRoute,
   ApiDiagRoute: ApiDiagRoute,
   ApiSyncRoute: ApiSyncRouteWithChildren,
+  ApiTestEmailRoute: ApiTestEmailRoute,
   ApiAuthLoginRoute: ApiAuthLoginRoute,
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,
   ApiAuthMeRoute: ApiAuthMeRoute,
