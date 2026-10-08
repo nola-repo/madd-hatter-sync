@@ -59,6 +59,14 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-clay-bg: var(--clay-bg);
+  --color-clay-card: var(--clay-card);
+  --color-clay-input: var(--clay-input);
+  --color-clay-text: var(--clay-text);
+  --color-clay-muted: var(--clay-muted);
+  --color-clay-primary: var(--clay-primary);
+  --color-clay-primary-foreground: var(--clay-primary-foreground);
+  --font-clay: var(--clay-font);
 }
 
 :root {
@@ -95,6 +103,15 @@
   --sidebar-accent-foreground: oklch(0.25 0.04 165);
   --sidebar-border: oklch(0.9 0.015 145);
   --sidebar-ring: oklch(0.45 0.13 165);
+  /* Claymorphism auth surface — warm cream clay with soft 3D depth. */
+  --clay-bg: oklch(0.975 0.008 100);
+  --clay-card: oklch(0.983 0.005 95);
+  --clay-input: oklch(0.928 0.014 82);
+  --clay-text: oklch(0.24 0.018 55);
+  --clay-muted: oklch(0.575 0.025 65);
+  --clay-primary: oklch(0.45 0.135 155);
+  --clay-primary-foreground: oklch(0.985 0.004 145);
+  --clay-font: "Nunito", ui-rounded, "Segoe UI", sans-serif;
 }
 
 .dark {
@@ -140,5 +157,53 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+  }
+}
+
+/* ----------------------------------------------------------------------------
+ * Claymorphism utilities — soft 3D clay surfaces for the auth pages.
+ * -------------------------------------------------------------------------- */
+@utility clay-surface {
+  background-color: var(--clay-card);
+  border-radius: 2rem;
+  border: 1px solid color-mix(in oklab, var(--clay-card) 60%, white 40%);
+  box-shadow:
+    -10px -10px 24px color-mix(in oklab, white 70%, transparent),
+    14px 14px 36px color-mix(in oklab, var(--clay-text) 22%, transparent);
+}
+
+@utility clay-inset {
+  background-color: var(--clay-input);
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--clay-input) 70%, white 30%);
+  box-shadow:
+    inset 4px 4px 10px color-mix(in oklab, var(--clay-text) 18%, transparent),
+    inset -3px -3px 8px color-mix(in oklab, white 55%, transparent);
+}
+
+@utility clay-button {
+  background-color: var(--clay-primary);
+  color: var(--clay-primary-foreground);
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--clay-primary) 80%, white 20%);
+  box-shadow:
+    -5px -5px 12px color-mix(in oklab, white 55%, transparent),
+    8px 8px 18px color-mix(in oklab, var(--clay-primary) 55%, transparent),
+    inset 0 2px 3px color-mix(in oklab, white 30%, transparent);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+@utility clay-button {
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      -6px -6px 14px color-mix(in oklab, white 60%, transparent),
+      10px 10px 22px color-mix(in oklab, var(--clay-primary) 60%, transparent),
+      inset 0 2px 3px color-mix(in oklab, white 35%, transparent);
+  }
+  &:active {
+    transform: translateY(0);
+    box-shadow:
+      inset 4px 4px 10px color-mix(in oklab, var(--clay-primary) 60%, transparent),
+      inset -3px -3px 8px color-mix(in oklab, white 25%, transparent);
   }
 }

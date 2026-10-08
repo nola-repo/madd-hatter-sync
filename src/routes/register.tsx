@@ -3,7 +3,6 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { TriangleAlert, Loader2, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
@@ -20,6 +19,7 @@ async function registerRequest(fullName: string, email: string, password: string
 type RegisterResponse = {
   ok?: boolean;
   requiresConfirmation?: boolean;
+  pendingApproval?: boolean;
   error?: string;
   setupRequired?: boolean;
   missing?: string[];
@@ -86,10 +86,13 @@ function RegisterPage() {
         setSetupRequired(res.missing ?? []);
       } else if (!res.ok) {
         setError(res.error ?? "Registration failed");
+      } else if (res.pendingApproval) {
+        const confirm = res.requiresConfirmation ? "1" : "0";
+        window.location.href = `/pending-approval?confirm=${confirm}`;
+        return;
       } else if (res.requiresConfirmation) {
         setSuccess("confirmation");
       } else {
-        // Session returned immediately — hard navigate so the fresh cookie is sent.
         window.location.href = "/admin";
         return;
       }
@@ -102,141 +105,213 @@ function RegisterPage() {
 
   if (success === "confirmation") {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-muted/40 px-4">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-              <CheckCircle2 className="h-5 w-5 text-primary" />
-            </div>
-            <CardTitle className="text-2xl">Check your email</CardTitle>
-            <CardDescription>
-              We sent a confirmation link to <strong>{email}</strong>. Click it to activate your
-              account, then sign in.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              type="button"
-              className="w-full"
-              onClick={() => router.navigate({ to: "/login" })}
-            >
-              Back to sign in
-            </Button>
-          </CardContent>
-        </Card>
+      <div
+        className="flex min-h-screen items-center justify-center px-4"
+        style={{
+          backgroundColor: "var(--clay-bg)",
+          fontFamily: "var(--clay-font)",
+        }}
+      >
+        <div className="clay-surface w-full max-w-md p-8 text-center sm:p-10">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--clay-primary)]/10">
+            <CheckCircle2 className="h-7 w-7" style={{ color: "var(--clay-primary)" }} />
+          </div>
+          <h1
+            className="text-2xl font-extrabold tracking-tight"
+            style={{ color: "var(--clay-text)" }}
+          >
+            Check your email
+          </h1>
+          <p className="mt-2 text-sm" style={{ color: "var(--clay-muted)" }}>
+            We sent a confirmation link to <strong>{email}</strong>. Click it to activate your
+            account, then sign in.
+          </p>
+          <button
+            type="button"
+            className="clay-button mt-6 flex h-12 w-full items-center justify-center text-base font-bold"
+            onClick={() => router.navigate({ to: "/login" })}
+          >
+            Back to sign in
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/40 px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl">Create your account</CardTitle>
-          <CardDescription>Join Madd Hatter POS Sync.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {setupRequired && (
-            <Alert variant="destructive" className="mb-4">
-              <TriangleAlert className="h-4 w-4" />
-              <AlertTitle>Setup required</AlertTitle>
-              <AlertDescription>
-                Add these secrets before registering: {setupRequired.join(", ")}. See the setup
-                guide on the home page.
-              </AlertDescription>
-            </Alert>
-          )}
-          {error && (
-            <Alert variant="destructive" className="mb-4">
-              <TriangleAlert className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-          <form onSubmit={onSubmit} className="space-y-4" noValidate>
-            <div className="space-y-2">
-              <Label htmlFor="fullName">Full name</Label>
+    <div
+      className="flex min-h-screen items-center justify-center px-4"
+      style={{
+        backgroundColor: "var(--clay-bg)",
+        fontFamily: "var(--clay-font)",
+      }}
+    >
+      <div className="clay-surface w-full max-w-md p-8 sm:p-10">
+        <div className="mb-7 text-center">
+          <h1
+            className="text-2xl font-extrabold tracking-tight"
+            style={{ color: "var(--clay-text)" }}
+          >
+            Create your account
+          </h1>
+          <p className="mt-1.5 text-sm" style={{ color: "var(--clay-muted)" }}>
+            Join Madd Hatter POS Sync.
+          </p>
+        </div>
+
+        {setupRequired && (
+          <Alert variant="destructive" className="mb-4 rounded-2xl border-0">
+            <TriangleAlert className="h-4 w-4" />
+            <AlertTitle>Setup required</AlertTitle>
+            <AlertDescription>
+              Add these secrets before registering: {setupRequired.join(", ")}. See the setup guide
+              on the home page.
+            </AlertDescription>
+          </Alert>
+        )}
+        {error && (
+          <Alert variant="destructive" className="mb-4 rounded-2xl border-0">
+            <TriangleAlert className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        <form onSubmit={onSubmit} className="space-y-5" noValidate>
+          <div className="space-y-2">
+            <Label
+              htmlFor="fullName"
+              style={{ color: "var(--clay-text)" }}
+              className="font-semibold"
+            >
+              Full name
+            </Label>
+            <Input
+              id="fullName"
+              type="text"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              required
+              autoComplete="name"
+              aria-invalid={!!fieldErrors.fullName}
+              placeholder="Jane Doe"
+              className="clay-inset h-12 border-0 px-5 text-base placeholder:text-[var(--clay-muted)] focus-visible:ring-2 focus-visible:ring-[var(--clay-primary)]/40"
+              style={{ color: "var(--clay-text)" }}
+            />
+            {fieldErrors.fullName && (
+              <p className="text-xs text-destructive">{fieldErrors.fullName}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label
+              htmlFor="register-email"
+              style={{ color: "var(--clay-text)" }}
+              className="font-semibold"
+            >
+              Email
+            </Label>
+            <Input
+              id="register-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+              aria-invalid={!!fieldErrors.email}
+              placeholder="you@example.com"
+              className="clay-inset h-12 border-0 px-5 text-base placeholder:text-[var(--clay-muted)] focus-visible:ring-2 focus-visible:ring-[var(--clay-primary)]/40"
+              style={{ color: "var(--clay-text)" }}
+            />
+            {fieldErrors.email && (
+              <p className="text-xs text-destructive">{fieldErrors.email}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label
+              htmlFor="register-password"
+              style={{ color: "var(--clay-text)" }}
+              className="font-semibold"
+            >
+              Password
+            </Label>
+            <div className="relative">
               <Input
-                id="fullName"
-                type="text"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-                autoComplete="name"
-                aria-invalid={!!fieldErrors.fullName}
-              />
-              {fieldErrors.fullName && (
-                <p className="text-xs text-destructive">{fieldErrors.fullName}</p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="register-email">Email</Label>
-              <Input
-                id="register-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                aria-invalid={!!fieldErrors.email}
-              />
-              {fieldErrors.email && <p className="text-xs text-destructive">{fieldErrors.email}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="register-password">Password</Label>
-              <div className="relative">
-                <Input
-                  id="register-password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  autoComplete="new-password"
-                  aria-invalid={!!fieldErrors.password}
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((s) => !s)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-              {fieldErrors.password ? (
-                <p className="text-xs text-destructive">{fieldErrors.password}</p>
-              ) : (
-                <p className="text-xs text-muted-foreground">Minimum 8 characters.</p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirm-password">Confirm password</Label>
-              <Input
-                id="confirm-password"
+                id="register-password"
                 type={showPassword ? "text" : "password"}
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 required
                 autoComplete="new-password"
-                aria-invalid={!!fieldErrors.confirm}
+                aria-invalid={!!fieldErrors.password}
+                placeholder="••••••••"
+                className="clay-inset h-12 border-0 px-5 pr-12 text-base placeholder:text-[var(--clay-muted)] focus-visible:ring-2 focus-visible:ring-[var(--clay-primary)]/40"
+                style={{ color: "var(--clay-text)" }}
               />
-              {fieldErrors.confirm && (
-                <p className="text-xs text-destructive">{fieldErrors.confirm}</p>
-              )}
+              <button
+                type="button"
+                onClick={() => setShowPassword((s) => !s)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--clay-muted)] hover:text-[var(--clay-text)]"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create account
-            </Button>
-          </form>
-          <p className="mt-4 text-center text-sm text-muted-foreground">
-            Already have an account?{" "}
-            <Link to="/login" className="font-medium text-primary hover:underline">
-              Sign in
-            </Link>
-          </p>
-        </CardContent>
-      </Card>
+            {fieldErrors.password ? (
+              <p className="text-xs text-destructive">{fieldErrors.password}</p>
+            ) : (
+              <p className="text-xs" style={{ color: "var(--clay-muted)" }}>
+                Minimum 8 characters.
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label
+              htmlFor="confirm-password"
+              style={{ color: "var(--clay-text)" }}
+              className="font-semibold"
+            >
+              Confirm password
+            </Label>
+            <Input
+              id="confirm-password"
+              type={showPassword ? "text" : "password"}
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              required
+              autoComplete="new-password"
+              aria-invalid={!!fieldErrors.confirm}
+              placeholder="••••••••"
+              className="clay-inset h-12 border-0 px-5 text-base placeholder:text-[var(--clay-muted)] focus-visible:ring-2 focus-visible:ring-[var(--clay-primary)]/40"
+              style={{ color: "var(--clay-text)" }}
+            />
+            {fieldErrors.confirm && (
+              <p className="text-xs text-destructive">{fieldErrors.confirm}</p>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="clay-button flex h-12 w-full items-center justify-center gap-2 text-base font-bold disabled:opacity-60"
+          >
+            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+            Create account
+          </button>
+        </form>
+
+        <p className="mt-6 text-center text-sm" style={{ color: "var(--clay-muted)" }}>
+          Already have an account?{" "}
+          <Link
+            to="/login"
+            className="font-bold underline-offset-2 hover:underline"
+            style={{ color: "var(--clay-primary)" }}
+          >
+            Sign in
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }

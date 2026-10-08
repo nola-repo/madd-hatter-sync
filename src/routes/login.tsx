@@ -1,4 +1,4 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
@@ -52,7 +52,6 @@ export const Route = createFileRoute("/login")({
 });
 
 function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -73,13 +72,6 @@ function LoginPage() {
       if ((res as { setupRequired?: boolean }).setupRequired) {
         setSetupRequired((res as { missing: string[] }).missing);
       } else if ((res as { ok: boolean }).ok) {
-        // Successful login: the server set the sb-<ref>-auth-token cookie via
-        // Set-Cookie on the /api/auth/login response. Do a hard navigation to
-        // /admin so the browser sends that fresh cookie on the document
-        // request. The _authenticated layout's beforeLoad runs during SSR
-        // (cookie not visible to internal fetches there), renders a brief
-        // loading shell, then re-checks /api/auth/me on the client where the
-        // cookie IS sent — and renders the dashboard.
         window.location.href = "/admin";
         return;
       } else {
@@ -117,150 +109,195 @@ function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/40 px-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl">Madd Hatter POS Sync</CardTitle>
-          <CardDescription>
+    <div
+      className="flex min-h-screen items-center justify-center px-4"
+      style={{
+        backgroundColor: "var(--clay-bg)",
+        fontFamily: "var(--clay-font)",
+      }}
+    >
+      <div className="clay-surface w-full max-w-md p-8 sm:p-10">
+        <div className="mb-7 text-center">
+          <h1
+            className="text-2xl font-extrabold tracking-tight"
+            style={{ color: "var(--clay-text)" }}
+          >
+            Madd Hatter POS Sync
+          </h1>
+          <p
+            className="mt-1.5 text-sm"
+            style={{ color: "var(--clay-muted)" }}
+          >
             Clover to CRM middleware. Sign in with your administrator account.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {setupRequired && (
-            <Alert variant="destructive" className="mb-4">
+          </p>
+        </div>
+
+        {setupRequired && (
+          <Alert variant="destructive" className="mb-4 rounded-2xl border-0">
+            <TriangleAlert className="h-4 w-4" />
+            <AlertTitle>Setup required</AlertTitle>
+            <AlertDescription>
+              Add these secrets before signing in: {setupRequired.join(", ")}. See the setup guide
+              on the home page.
+            </AlertDescription>
+          </Alert>
+        )}
+        {error && (
+          <Alert variant="destructive" className="mb-4 rounded-2xl border-0">
+            <TriangleAlert className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        <form onSubmit={onSubmit} className="space-y-5">
+          <div className="space-y-2">
+            <Label
+              htmlFor="email"
+              style={{ color: "var(--clay-text)" }}
+              className="font-semibold"
+            >
+              Admin email
+            </Label>
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+              placeholder="you@example.com"
+              className="clay-inset h-12 border-0 px-5 text-base placeholder:text-[var(--clay-muted)] focus-visible:ring-2 focus-visible:ring-[var(--clay-primary)]/40"
+              style={{ color: "var(--clay-text)" }}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label
+              htmlFor="password"
+              style={{ color: "var(--clay-text)" }}
+              className="font-semibold"
+            >
+              Password
+            </Label>
+            <Input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+              placeholder="••••••••"
+              className="clay-inset h-12 border-0 px-5 text-base placeholder:text-[var(--clay-muted)] focus-visible:ring-2 focus-visible:ring-[var(--clay-primary)]/40"
+              style={{ color: "var(--clay-text)" }}
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="clay-button flex h-12 w-full items-center justify-center gap-2 text-base font-bold disabled:opacity-60"
+          >
+            {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+            Sign in
+          </button>
+        </form>
+
+        <p
+          className="mt-6 text-center text-sm"
+          style={{ color: "var(--clay-muted)" }}
+        >
+          Don't have an account?{" "}
+          <Link
+            to="/register"
+            className="font-bold underline-offset-2 hover:underline"
+            style={{ color: "var(--clay-primary)" }}
+          >
+            Register
+          </Link>
+        </p>
+
+        <div className="mt-7 border-t pt-5" style={{ borderColor: "color-mix(in oklab, var(--clay-input) 50%, transparent)" }}>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full rounded-full border-0 bg-transparent font-semibold"
+            style={{ color: "var(--clay-muted)" }}
+            disabled={testing}
+            onClick={onTestConnection}
+          >
+            {testing ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <PlugZap className="mr-2 h-4 w-4" />
+            )}
+            Test Supabase connection
+          </Button>
+
+          {testSetup && (
+            <Alert variant="destructive" className="mt-3 rounded-2xl border-0">
               <TriangleAlert className="h-4 w-4" />
               <AlertTitle>Setup required</AlertTitle>
               <AlertDescription>
-                Add these secrets before signing in: {setupRequired.join(", ")}. See the setup guide
-                on the home page.
+                Add these secrets first: {testSetup.join(", ")}. See the setup guide on the home
+                page.
               </AlertDescription>
             </Alert>
           )}
-          {error && (
-            <Alert variant="destructive" className="mb-4">
-              <TriangleAlert className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
+
+          {testResult && (
+            <Alert
+              variant={
+                testResult.secretKeyOk && testResult.publishableKeyOk ? "default" : "destructive"
+              }
+              className="mt-3 rounded-2xl border-0"
+            >
+              {testResult.secretKeyOk && testResult.publishableKeyOk ? (
+                <CheckCircle2 className="h-4 w-4" />
+              ) : (
+                <XCircle className="h-4 w-4" />
+              )}
+              <AlertTitle>
+                {testResult.secretKeyOk && testResult.publishableKeyOk
+                  ? "Supabase connected"
+                  : "Connection problem"}
+              </AlertTitle>
+              <AlertDescription className="space-y-1">
+                <div className="flex items-center gap-2 text-sm">
+                  <span>
+                    Secret key:{" "}
+                    {testResult.secretKeyOk ? (
+                      <span className="font-medium text-primary">valid</span>
+                    ) : (
+                      <span className="font-medium text-destructive">invalid</span>
+                    )}
+                  </span>
+                  <span className="opacity-40">·</span>
+                  <span>
+                    Publishable key:{" "}
+                    {testResult.publishableKeyOk ? (
+                      <span className="font-medium text-primary">valid</span>
+                    ) : (
+                      <span className="font-medium text-destructive">invalid</span>
+                    )}
+                  </span>
+                </div>
+                {testResult.adminUserCount !== null && (
+                  <div className="text-sm">
+                    Admin users found: {testResult.adminUserCount}
+                    {testResult.adminUserCount === 0 && (
+                      <span className="text-destructive">
+                        {" "}
+                        — create an admin user in Supabase first.
+                      </span>
+                    )}
+                  </div>
+                )}
+                {testResult.detail && (
+                  <div className="text-sm opacity-80">{testResult.detail}</div>
+                )}
+              </AlertDescription>
             </Alert>
           )}
-          <form onSubmit={onSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Admin email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Sign in
-            </Button>
-          </form>
-          <p className="mt-4 text-center text-sm text-muted-foreground">
-            Don't have an account?{" "}
-            <Link to="/register" className="font-medium text-primary hover:underline">
-              Register
-            </Link>
-          </p>
-
-          <div className="mt-4 border-t pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              disabled={testing}
-              onClick={onTestConnection}
-            >
-              {testing ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <PlugZap className="mr-2 h-4 w-4" />
-              )}
-              Test Supabase connection
-            </Button>
-
-            {testSetup && (
-              <Alert variant="destructive" className="mt-3">
-                <TriangleAlert className="h-4 w-4" />
-                <AlertTitle>Setup required</AlertTitle>
-                <AlertDescription>
-                  Add these secrets first: {testSetup.join(", ")}. See the setup guide on the home
-                  page.
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {testResult && (
-              <Alert
-                variant={
-                  testResult.secretKeyOk && testResult.publishableKeyOk ? "default" : "destructive"
-                }
-                className="mt-3"
-              >
-                {testResult.secretKeyOk && testResult.publishableKeyOk ? (
-                  <CheckCircle2 className="h-4 w-4" />
-                ) : (
-                  <XCircle className="h-4 w-4" />
-                )}
-                <AlertTitle>
-                  {testResult.secretKeyOk && testResult.publishableKeyOk
-                    ? "Supabase connected"
-                    : "Connection problem"}
-                </AlertTitle>
-                <AlertDescription className="space-y-1">
-                  <div className="flex items-center gap-2 text-sm">
-                    <span>
-                      Secret key:{" "}
-                      {testResult.secretKeyOk ? (
-                        <span className="font-medium text-primary">valid</span>
-                      ) : (
-                        <span className="font-medium text-destructive">invalid</span>
-                      )}
-                    </span>
-                    <span className="opacity-40">·</span>
-                    <span>
-                      Publishable key:{" "}
-                      {testResult.publishableKeyOk ? (
-                        <span className="font-medium text-primary">valid</span>
-                      ) : (
-                        <span className="font-medium text-destructive">invalid</span>
-                      )}
-                    </span>
-                  </div>
-                  {testResult.adminUserCount !== null && (
-                    <div className="text-sm">
-                      Admin users found: {testResult.adminUserCount}
-                      {testResult.adminUserCount === 0 && (
-                        <span className="text-destructive">
-                          {" "}
-                          — create an admin user in Supabase first.
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  {testResult.detail && (
-                    <div className="text-sm opacity-80">{testResult.detail}</div>
-                  )}
-                </AlertDescription>
-              </Alert>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
