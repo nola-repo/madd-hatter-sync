@@ -6,6 +6,7 @@ import { isSetupRequired, getMissingSecrets } from "./config.server";
 import { getAdminSession } from "./auth.server";
 import { getSupabaseServer } from "./supabase.server";
 import { isSuperAdminEmail } from "./super-admin";
+import { sendAccountApprovedEmail } from "./registration-emails.server";
 
 export type ManagedUser = {
   userId: string;
@@ -134,9 +135,11 @@ export const setUserApproval = createServerFn({ method: "POST" })
         };
       }
       const sb = getSupabaseServer();
-      // Look up the email for this user so the allowlist row stays consistent.
+      // Look up the email + name for this user so the allowlist row stays
+      // consistent and we can send the approval email.
       const u = await sb.auth.admin.getUserById(data.userId);
       const email = u.data?.user?.email ?? "";
+      const fullName = (u.data?.user?.user_metadata?.full_name as string | undefined) ?? "";
       const { error } = await sb.from("admin_users").upsert(
         {
           user_id: data.userId,
@@ -146,7 +149,34 @@ export const setUserApproval = createServerFn({ method: "POST" })
         { onConflict: "user_id" },
       );
       if (error) return { setupRequired: false as const, ok: false, error: error.message };
-      return { setupRequired: false as const, ok: true };
+
+      // When approving, send the "your account is approved" email to the user.
+      // Awaited directly (static import) so it actually completes before the
+      // response returns. The result is surfaced to the UI for diagnostics.
+      let emailSent: "sent" | "failed" | "skipped" = "skipped";
+      if (data.approved && email) {
+        try {
+          const ok = await sendAccountApprovedEmail({ userId: data.userId, email, fullName });
+          emailSent = ok ? "sent" : "failed";
+        } catch (e) {
+          emailSent = "failed";
+          console.error("[user-mgmt] approved email exception:", (e as Error)?.message ?? e);
+        }
+      }
+      // If revoking, reset the approved-email dedup so a future re-approval
+      // can send the notice again.
+      if (!data.approved) {
+        await sb
+          .from("admin_users")
+          .update({ approved_email_sent_at: null })
+          .eq("user_id", data.userId)
+          .then(
+            () => {},
+            () => {},
+          );
+      }
+
+      return { setupRequired: false as const, ok: true, emailSent };
     } catch (e) {
       if (isSetupRequired(e)) return setupRequiredResponse(e);
       throw e;

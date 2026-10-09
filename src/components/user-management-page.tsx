@@ -68,7 +68,14 @@ export function UserManagementPage() {
         toast.error((res as { error?: string }).error ?? "Failed to update.");
         return;
       }
-      toast.success(u.approved ? "Access revoked." : "Access granted.");
+      if (!u.approved) {
+        const sent = (res as { emailSent?: string }).emailSent;
+        if (sent === "sent") toast.success("Access granted. Approval email sent.");
+        else if (sent === "failed") toast.success("Access granted. Approval email failed to send.");
+        else toast.success("Access granted.");
+      } else {
+        toast.success("Access revoked.");
+      }
       setUsers((prev) =>
         prev.map((p) => (p.userId === u.userId ? { ...p, approved: !p.approved } : p)),
       );
