@@ -11,7 +11,6 @@ import { syncOrderToGhl } from "./sync.server";
 import { getAdminSession } from "./auth.server";
 import { getSupabaseServer } from "./supabase.server";
 import {
-  getDashboardStats,
   listOrders,
   listOrderItems,
   listCustomers,
@@ -24,6 +23,7 @@ import {
   getOrderDetail,
   listCustomersWithPurchases,
 } from "./pos-data.server";
+import { getDashboardStats } from "./dashboard-items.server";
 
 import { refreshPosData } from "./ingestion.server";
 import { getLastSyncRun } from "./sync-run-lookup.server";

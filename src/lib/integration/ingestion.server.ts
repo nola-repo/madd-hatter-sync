@@ -8,6 +8,10 @@ import { getSupabaseServer } from "./supabase.server";
 import { syncOrderToGhl } from "./sync.server";
 import { processPendingPurchases } from "./purchase-ops.server";
 import { findPurchaseObjectSchema, validatePurchaseSchema } from "./ghl.server";
+import {
+  createSyncRun,
+  finishSyncRun,
+} from "./sync-run-bookkeeping.server";
 
 import {
   rangeToMs,
@@ -136,7 +140,7 @@ async function cloverPaginate(
   return { elements: out, pages };
 }
 
-// ---- Sync run record ---------------------------------------------------
+// ---- Public: refresh POS data ------------------------------------------
 
 export type SyncRunSummary = {
   runId: string;
@@ -171,67 +175,6 @@ export type SyncRunSummary = {
   startedAt: string;
   finishedAt: string | null;
 };
-
-async function createSyncRun(
-  merchantId: string,
-  kind: string,
-  rangeStart?: number,
-  rangeEnd?: number,
-) {
-  const sb = getSupabaseServer();
-  const { data, error } = await sb
-    .from("sync_runs")
-    .insert({
-      clover_merchant_id: merchantId,
-      kind,
-      status: "running",
-      range_start: rangeStart ?? null,
-      range_end: rangeEnd ?? null,
-    })
-    .select("*")
-    .maybeSingle();
-  if (error) throw new Error(`create sync_run: ${error.message}`);
-  return data;
-}
-
-async function finishSyncRun(runId: string, patch: Record<string, any>) {
-  const sb = getSupabaseServer();
-  const row: Record<string, any> = {
-    finished_at: new Date().toISOString(),
-  };
-
-  if (patch.status !== undefined) row.status = patch.status;
-  if (patch.errors !== undefined) row.errors = patch.errors;
-  if (patch.ordersFetched !== undefined) row.orders_fetched = patch.ordersFetched;
-  if (patch.ordersUpserted !== undefined) row.orders_upserted = patch.ordersUpserted;
-  if (patch.orderItemsFetched !== undefined) row.order_items_fetched = patch.orderItemsFetched;
-  if (patch.orderItemsUpserted !== undefined) row.order_items_upserted = patch.orderItemsUpserted;
-  if (patch.customersFetched !== undefined) row.customers_fetched = patch.customersFetched;
-  if (patch.customersUpserted !== undefined) row.customers_upserted = patch.customersUpserted;
-  if (patch.paymentsFetched !== undefined) row.payments_fetched = patch.paymentsFetched;
-  if (patch.paymentsUpserted !== undefined) row.payments_upserted = patch.paymentsUpserted;
-  if (patch.productsFetched !== undefined) row.products_fetched = patch.productsFetched;
-  if (patch.productsUpserted !== undefined) row.products_upserted = patch.productsUpserted;
-  if (patch.categoriesFetched !== undefined) row.categories_fetched = patch.categoriesFetched;
-  if (patch.categoriesUpserted !== undefined) row.categories_upserted = patch.categoriesUpserted;
-  if (patch.employeesFetched !== undefined) row.employees_fetched = patch.employeesFetched;
-  if (patch.employeesUpserted !== undefined) row.employees_upserted = patch.employeesUpserted;
-  if (patch.modifiersFetched !== undefined) row.modifiers_fetched = patch.modifiersFetched;
-  if (patch.discountsFetched !== undefined) row.discounts_fetched = patch.discountsFetched;
-  if (patch.crmOrdersSynced !== undefined) row.crm_orders_synced = patch.crmOrdersSynced;
-  if (patch.crmOrdersHeld !== undefined) row.crm_orders_held = patch.crmOrdersHeld;
-  if (patch.crmOrdersErrors !== undefined) row.crm_orders_errors = patch.crmOrdersErrors;
-  if (patch.crmContactsCreated !== undefined) row.crm_contacts_created = patch.crmContactsCreated;
-  if (patch.crmPurchaseRecordsCreated !== undefined)
-    row.crm_purchase_records_created = patch.crmPurchaseRecordsCreated;
-
-  const { error } = await sb.from("sync_runs").update(row).eq("id", runId);
-  if (error) {
-    console.warn(`[sync_runs] Failed to update run ${runId}:`, error.message);
-  }
-}
-
-// ---- Public: refresh POS data ------------------------------------------
 
 export type RefreshOptions = {
   kind?: "incremental" | "full";
@@ -322,224 +265,245 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
           ? Math.round(Number(v))
           : 0;
 
-  // For incremental syncs (such as routine 15-minute cron triggers),
-  // skip static catalog data (categories, products, employees, modifiers, discounts)
-  // to finish in 2-4 seconds and stay far below the 30s ceiling.
-  // Full catalog is pulled on kind === "full".
-  if (kind === "full") {
-    // 1. Categories
-    await safe("categories", async () => {
-      const { elements: cats } = await cloverPaginate(`/v3/merchants/${merchantId}/categories`);
-      counters.categoriesFetched = cats.length;
-      for (const cat of cats) await upsertCategory(merchantId, cat);
-      counters.categoriesUpserted = cats.length;
-    });
+  // SAFEGUARD: wrap the entire work body in try/catch so the run record
+  // ALWAYS closes as completed or failed. Previously, if the Worker hit its
+  // subrequest/CPU ceiling mid-loop, finishSyncRun() never ran and the row
+  // stayed "running" with orders_upserted=0 (counters were only flushed at
+  // the very end). Now an aborting error is captured and the run is marked
+  // failed before re-throwing.
+  let aborted = false;
+  try {
+    // For incremental syncs (such as routine 15-minute cron triggers),
+    // skip static catalog data (categories, products, employees, modifiers, discounts)
+    // to finish in 2-4 seconds and stay far below the 30s ceiling.
+    // Full catalog is pulled on kind === "full".
+    if (kind === "full") {
+      // 1. Categories
+      await safe("categories", async () => {
+        const { elements: cats } = await cloverPaginate(`/v3/merchants/${merchantId}/categories`);
+        counters.categoriesFetched = cats.length;
+        for (const cat of cats) await upsertCategory(merchantId, cat);
+        counters.categoriesUpserted = cats.length;
+      });
 
-    const catNameMap = new Map<string, string>();
-    await safe("category-names", async () => {
-      const { elements: cats } = await cloverPaginate(`/v3/merchants/${merchantId}/categories`);
-      for (const cat of cats) if (cat.id && cat.name) catNameMap.set(cat.id, cat.name);
-    });
+      const catNameMap = new Map<string, string>();
+      await safe("category-names", async () => {
+        const { elements: cats } = await cloverPaginate(`/v3/merchants/${merchantId}/categories`);
+        for (const cat of cats) if (cat.id && cat.name) catNameMap.set(cat.id, cat.name);
+      });
 
-    // 2. Products
-    await safe("products", async () => {
-      const { elements: items } = await cloverPaginate(
-        `/v3/merchants/${merchantId}/items?expand=categories`,
-      );
-      counters.productsFetched = items.length;
-      for (const it of items) {
-        const catId = it.categories?.elements?.[0]?.id;
-        await upsertProduct(merchantId, it, catId ? (catNameMap.get(catId) ?? null) : null);
-      }
-      counters.productsUpserted = items.length;
-    });
+      // 2. Products
+      await safe("products", async () => {
+        const { elements: items } = await cloverPaginate(
+          `/v3/merchants/${merchantId}/items?expand=categories`,
+        );
+        counters.productsFetched = items.length;
+        for (const it of items) {
+          const catId = it.categories?.elements?.[0]?.id;
+          await upsertProduct(merchantId, it, catId ? (catNameMap.get(catId) ?? null) : null);
+        }
+        counters.productsUpserted = items.length;
+      });
 
-    // 3. Customers (expanded emailAddresses, phoneNumbers, addresses)
-    await safe("customers", async () => {
-      const { elements: customers } = await cloverPaginate(
-        `/v3/merchants/${merchantId}/customers?expand=emailAddresses,phoneNumbers,addresses`,
-      );
-      counters.customersFetched = customers.length;
-      for (const cust of customers) await upsertCustomer(merchantId, cust);
-      counters.customersUpserted = customers.length;
-    });
+      // 3. Customers (expanded emailAddresses, phoneNumbers, addresses)
+      await safe("customers", async () => {
+        const { elements: customers } = await cloverPaginate(
+          `/v3/merchants/${merchantId}/customers?expand=emailAddresses,phoneNumbers,addresses`,
+        );
+        counters.customersFetched = customers.length;
+        for (const cust of customers) await upsertCustomer(merchantId, cust);
+        counters.customersUpserted = customers.length;
+      });
 
-    // 4. Employees
-    await safe("employees", async () => {
-      const { elements: emps } = await cloverPaginate(`/v3/merchants/${merchantId}/employees`);
-      counters.employeesFetched = emps.length;
-      for (const e of emps) await upsertEmployee(merchantId, e);
-      counters.employeesUpserted = emps.length;
-    });
+      // 4. Employees
+      await safe("employees", async () => {
+        const { elements: emps } = await cloverPaginate(`/v3/merchants/${merchantId}/employees`);
+        counters.employeesFetched = emps.length;
+        for (const e of emps) await upsertEmployee(merchantId, e);
+        counters.employeesUpserted = emps.length;
+      });
 
-    // 5. Modifier groups + modifiers
-    await safe("modifier-groups", async () => {
-      const { elements: groups } = await cloverPaginate(
-        `/v3/merchants/${merchantId}/modifier_groups`,
-      );
-      for (const g of groups) await upsertModifierGroup(merchantId, g);
-    });
-    await safe("modifiers", async () => {
-      const { elements: mods } = await cloverPaginate(`/v3/merchants/${merchantId}/modifiers`);
-      counters.modifiersFetched = mods.length;
-      for (const m of mods) await upsertModifier(merchantId, m);
-    });
+      // 5. Modifier groups + modifiers
+      await safe("modifier-groups", async () => {
+        const { elements: groups } = await cloverPaginate(
+          `/v3/merchants/${merchantId}/modifier_groups`,
+        );
+        for (const g of groups) await upsertModifierGroup(merchantId, g);
+      });
+      await safe("modifiers", async () => {
+        const { elements: mods } = await cloverPaginate(`/v3/merchants/${merchantId}/modifiers`);
+        counters.modifiersFetched = mods.length;
+        for (const m of mods) await upsertModifier(merchantId, m);
+      });
 
-    // 6. Discounts
-    await safe("discounts", async () => {
-      const { elements: discounts } = await cloverPaginate(`/v3/merchants/${merchantId}/discounts`);
-      counters.discountsFetched = discounts.length;
-      for (const d of discounts) await upsertDiscount(merchantId, d);
-    });
-  }
-
-  // 7. Orders — full expansion: lineItems + discounts + modifiers, payments +
-  //    refunds, refunds, discounts, customers, serviceCharge, employee.
-  await safe("orders", async () => {
-    // In cron/batch mode, cap to 1 page (up to 100 orders) so fetch + line item upserts
-    // easily finish in 4–8 seconds, well below the 30s timeout on cron-job.org.
-    const maxOrderPages = kind === "incremental" ? 1 : 150;
-    const orderPageOpts = {
-      limit: kind === "incremental" ? 50 : 100,
-      maxPages: maxOrderPages,
-      extraParams: "orderBy=createdTime+DESC",
-    };
-    let orders: any[] = [];
-    let pages = 0;
-    try {
-      const r = await cloverPaginate(
-        `/v3/merchants/${merchantId}/orders?expand=lineItems,lineItems.discounts,lineItems.modifiers,payments,payments.refunds,refunds,discounts,customers,serviceCharge,employee${dateFilter}`,
-        orderPageOpts,
-      );
-      orders = r.elements;
-      pages = r.pages;
-    } catch {
-      const r = await cloverPaginate(
-        `/v3/merchants/${merchantId}/orders?expand=lineItems,payments,refunds,customers${dateFilter}`,
-        orderPageOpts,
-      );
-      orders = r.elements;
-      pages = r.pages;
+      // 6. Discounts
+      await safe("discounts", async () => {
+        const { elements: discounts } = await cloverPaginate(`/v3/merchants/${merchantId}/discounts`);
+        counters.discountsFetched = discounts.length;
+        for (const d of discounts) await upsertDiscount(merchantId, d);
+      });
     }
-    counters.ordersFetched = orders.length;
-    recon.ordersFetched = orders.length;
-    recon.pagesFetched = pages;
 
-    const startOrderLoop = Date.now();
-    for (const order of orders) {
-      if (kind === "incremental" && Date.now() - startOrderLoop > 10000) {
-        break;
-      }
+    // 7. Orders — full expansion: lineItems + discounts + modifiers, payments +
+    //    refunds, refunds, discounts, customers, serviceCharge, employee.
+    await safe("orders", async () => {
+      // In cron/batch mode, cap to 1 page (up to 100 orders) so fetch + line item upserts
+      // easily finish in 4–8 seconds, well below the 30s timeout on cron-job.org.
+      const maxOrderPages = kind === "incremental" ? 1 : 150;
+      const orderPageOpts = {
+        limit: kind === "incremental" ? 50 : 100,
+        maxPages: maxOrderPages,
+        extraParams: "orderBy=createdTime+DESC",
+      };
+      let orders: any[] = [];
+      let pages = 0;
       try {
-        const orderRow = await upsertOrderRecord(merchantId, order);
-        counters.ordersUpserted += 1;
-        const currency = order.currency ?? "USD";
-        const payments: any[] = order.payments?.elements ?? order.payments ?? [];
-        const refunds: any[] = order.refunds?.elements ?? order.refunds ?? [];
-        const discounts: any[] = order.discounts?.elements ?? order.discounts ?? [];
-        const lineItems: any[] = order.lineItems?.elements ?? order.lineItems ?? [];
-        const paymentStatus = derivePaymentStatus(order, payments);
-        const createdTime = typeof order.createdTime === "number" ? order.createdTime : 0;
-
-        // ---- Reconciliation accumulation (per order) ----
-        // Net sales = sum of line item totals (unit*qty + mods - line disc).
-        const orderNetSales = lineItems.reduce((s, li) => {
-          const unit = c(li.price);
-          const qty = Number(li.quantity ?? 1) || 0;
-          const mods = (li.modifiers?.elements ?? li.modifiers ?? []).reduce(
-            (ms: number, m: any) => ms + c(m.amount ?? m.price),
-            0,
-          );
-          const disc = (li.discounts?.elements ?? li.discounts ?? []).reduce(
-            (ds: number, d: any) => ds + c(d.amount),
-            0,
-          );
-          return s + Math.max(0, unit * qty + mods - disc);
-        }, 0);
-        recon.netSalesCents += orderNetSales;
-        recon.grossSalesCents += orderNetSales; // gross == net before order-level discounts
-        recon.discountsCents += discounts.reduce((s, d) => s + c(d.amount), 0);
-        recon.taxesCents +=
-          c(order.taxAmount) + lineItems.reduce((s, li) => s + c(li.taxAmount), 0);
-        recon.serviceChargesCents += c(order.serviceCharge?.amount);
-        recon.tipsCents += payments.reduce((s, p) => s + c(p.tipAmount), 0);
-        recon.refundAmountCents += refunds.reduce((s, r) => s + c(r.amount), 0);
-        recon.itemsSold += lineItems.reduce((s, li) => s + (Number(li.quantity ?? 1) || 0), 0);
-        recon.paymentsFetched += payments.length;
-        recon.refundsFetched += refunds.length;
-        recon.voidsFetched += payments.filter((p) => p.result === "VOIDED").length;
-        if (paymentStatus === "PAID") recon.paidOrderCount += 1;
-
-        for (const li of lineItems) {
-          await upsertOrderItemRecord(
-            merchantId,
-            orderRow.id,
-            order.id,
-            li,
-            currency,
-            paymentStatus,
-            createdTime,
-          );
-          counters.orderItemsFetched += 1;
-          counters.orderItemsUpserted += 1;
-        }
-        for (const p of payments) {
-          await upsertPayment(merchantId, p);
-          counters.paymentsFetched += 1;
-          counters.paymentsUpserted += 1;
-        }
-        for (const r of refunds) {
-          await upsertRefund(merchantId, r);
-          counters.refundsFetched += 1;
-        }
-      } catch (e: any) {
-        errors.push(`order ${order.id}: ${e?.message ?? String(e)}`);
+        const r = await cloverPaginate(
+          `/v3/merchants/${merchantId}/orders?expand=lineItems,lineItems.discounts,lineItems.modifiers,payments,payments.refunds,refunds,discounts,customers,serviceCharge,employee${dateFilter}`,
+          orderPageOpts,
+        );
+        orders = r.elements;
+        pages = r.pages;
+      } catch {
+        const r = await cloverPaginate(
+          `/v3/merchants/${merchantId}/orders?expand=lineItems,payments,refunds,customers${dateFilter}`,
+          orderPageOpts,
+        );
+        orders = r.elements;
+        pages = r.pages;
       }
-    }
-  });
+      counters.ordersFetched = orders.length;
+      recon.ordersFetched = orders.length;
+      recon.pagesFetched = pages;
 
-  // 8. Standalone payments/refunds are skipped on incremental cron runs because
-  // payments/refunds are already fetched and upserted in step 7 via order expansions.
-  // Skipping them saves 2 extra network round-trips to Clover, keeping execution under 8s.
-  if (kind === "full") {
-    await safe("payments", async () => {
-      const { elements: payments } = await cloverPaginate(
-        `/v3/merchants/${merchantId}/payments?expand=tender,cardTransaction${dateFilter}`,
-        { limit: 100, maxPages: 20 },
-      );
-      for (const p of payments) {
+      const startOrderLoop = Date.now();
+      for (const order of orders) {
+        if (kind === "incremental" && Date.now() - startOrderLoop > 10000) {
+          break;
+        }
         try {
-          await upsertPayment(merchantId, p);
+          const orderRow = await upsertOrderRecord(merchantId, order);
+          counters.ordersUpserted += 1;
+          const currency = order.currency ?? "USD";
+          const payments: any[] = order.payments?.elements ?? order.payments ?? [];
+          const refunds: any[] = order.refunds?.elements ?? order.refunds ?? [];
+          const discounts: any[] = order.discounts?.elements ?? order.discounts ?? [];
+          const lineItems: any[] = order.lineItems?.elements ?? order.lineItems ?? [];
+          const paymentStatus = derivePaymentStatus(order, payments);
+          const createdTime = typeof order.createdTime === "number" ? order.createdTime : 0;
+
+          // ---- Reconciliation accumulation (per order) ----
+          // Net sales = sum of line item totals (unit*qty + mods - line disc).
+          const orderNetSales = lineItems.reduce((s, li) => {
+            const unit = c(li.price);
+            const qty = Number(li.quantity ?? 1) || 0;
+            const mods = (li.modifiers?.elements ?? li.modifiers ?? []).reduce(
+              (ms: number, m: any) => ms + c(m.amount ?? m.price),
+              0,
+            );
+            const disc = (li.discounts?.elements ?? li.discounts ?? []).reduce(
+              (ds: number, d: any) => ds + c(d.amount),
+              0,
+            );
+            return s + Math.max(0, unit * qty + mods - disc);
+          }, 0);
+          recon.netSalesCents += orderNetSales;
+          recon.grossSalesCents += orderNetSales; // gross == net before order-level discounts
+          recon.discountsCents += discounts.reduce((s, d) => s + c(d.amount), 0);
+          recon.taxesCents +=
+            c(order.taxAmount) + lineItems.reduce((s, li) => s + c(li.taxAmount), 0);
+          recon.serviceChargesCents += c(order.serviceCharge?.amount);
+          recon.tipsCents += payments.reduce((s, p) => s + c(p.tipAmount), 0);
+          recon.refundAmountCents += refunds.reduce((s, r) => s + c(r.amount), 0);
+          recon.itemsSold += lineItems.reduce((s, li) => s + (Number(li.quantity ?? 1) || 0), 0);
+          recon.paymentsFetched += payments.length;
+          recon.refundsFetched += refunds.length;
+          recon.voidsFetched += payments.filter((p) => p.result === "VOIDED").length;
+          if (paymentStatus === "PAID") recon.paidOrderCount += 1;
+
+          for (const li of lineItems) {
+            await upsertOrderItemRecord(
+              merchantId,
+              orderRow.id,
+              order.id,
+              li,
+              currency,
+              paymentStatus,
+              createdTime,
+            );
+            counters.orderItemsFetched += 1;
+            counters.orderItemsUpserted += 1;
+          }
+          for (const p of payments) {
+            await upsertPayment(merchantId, p);
+            counters.paymentsFetched += 1;
+            counters.paymentsUpserted += 1;
+          }
+          for (const r of refunds) {
+            await upsertRefund(merchantId, r);
+            counters.refundsFetched += 1;
+          }
         } catch (e: any) {
-          errors.push(`payment ${p.id}: ${e?.message ?? String(e)}`);
+          errors.push(`order ${order.id}: ${e?.message ?? String(e)}`);
         }
       }
-      counters.paymentsFetched = Math.max(counters.paymentsFetched, payments.length);
-      counters.paymentsUpserted = Math.max(counters.paymentsUpserted, payments.length);
     });
 
-    await safe("refunds", async () => {
-      try {
-        const { elements: refunds } = await cloverPaginate(
-          `/v3/merchants/${merchantId}/refunds${dateFilter}`,
+    // 8. Standalone payments/refunds are skipped on incremental cron runs because
+    // payments/refunds are already fetched and upserted in step 7 via order expansions.
+    // Skipping them saves 2 extra network round-trips to Clover, keeping execution under 8s.
+    if (kind === "full") {
+      await safe("payments", async () => {
+        const { elements: payments } = await cloverPaginate(
+          `/v3/merchants/${merchantId}/payments?expand=tender,cardTransaction${dateFilter}`,
           { limit: 100, maxPages: 20 },
         );
-        for (const r of refunds) {
+        for (const p of payments) {
           try {
-            await upsertRefund(merchantId, r);
+            await upsertPayment(merchantId, p);
           } catch (e: any) {
-            errors.push(`refund ${r.id}: ${e?.message ?? String(e)}`);
+            errors.push(`payment ${p.id}: ${e?.message ?? String(e)}`);
           }
         }
-        counters.refundsFetched = Math.max(counters.refundsFetched, refunds.length);
-      } catch {
-        /* /refunds may be unavailable on some plans */
-      }
-    });
+        counters.paymentsFetched = Math.max(counters.paymentsFetched, payments.length);
+        counters.paymentsUpserted = Math.max(counters.paymentsUpserted, payments.length);
+      });
+
+      await safe("refunds", async () => {
+        try {
+          const { elements: refunds } = await cloverPaginate(
+            `/v3/merchants/${merchantId}/refunds${dateFilter}`,
+            { limit: 100, maxPages: 20 },
+          );
+          for (const r of refunds) {
+            try {
+              await upsertRefund(merchantId, r);
+            } catch (e: any) {
+              errors.push(`refund ${r.id}: ${e?.message ?? String(e)}`);
+            }
+          }
+          counters.refundsFetched = Math.max(counters.refundsFetched, refunds.length);
+        } catch {
+          /* /refunds may be unavailable on some plans */
+        }
+      });
+    }
+  } catch (e: any) {
+    // The Worker hit a ceiling (subrequest limit, CPU, OOM) or an uncaught
+    // error escaped the safe() wrappers. Capture it so the run record
+    // reflects reality, then re-throw so the caller still sees the failure.
+    aborted = true;
+    errors.push(`abort: ${e?.message ?? String(e)}`);
+    await finishSyncRun(runId, {
+      status: "failed",
+      ...counters,
+      errors: JSON.stringify(errors),
+    }).catch(() => {});
+    throw e;
   }
 
   const status: "completed" | "failed" =
-    errors.some((e) => e.startsWith("orders:")) && counters.ordersUpserted === 0
+    aborted || (errors.some((e) => e.startsWith("orders:")) && counters.ordersUpserted === 0)
       ? "failed"
       : "completed";
 
