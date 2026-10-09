@@ -14,7 +14,7 @@ import { PageHeader, EmptyState } from "@/components/page-header";
 import { getDashboard } from "@/lib/integration/integration.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { useSyncVersion } from "@/hooks/use-sync-context";
-import { money, formatDateTime } from "@/lib/integration/format";
+import { money, formatDateTimeTz } from "@/lib/integration/format";
 import type { DashboardStats } from "@/lib/integration/types";
 
 type HomeRange = "today" | "week" | "month";
@@ -226,7 +226,7 @@ export function DashboardPage() {
                   <div>
                     <div className="text-sm font-medium text-foreground">{o.cloverOrderId}</div>
                     <div className="text-xs text-muted-foreground">
-                      {formatDateTime(o.createdTime)}
+                      {formatDateTimeTz(o.createdTime)}
                     </div>
                   </div>
                   <div className="text-right">

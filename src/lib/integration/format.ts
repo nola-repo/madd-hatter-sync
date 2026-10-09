@@ -28,6 +28,24 @@ export function formatDateTime(ms: number): string {
   });
 }
 
+/**
+ * Format a timestamp in the merchant's timezone (America/New_York by default),
+ * matching what the Clover dashboard shows for the merchant. Used for Recent
+ * Orders so the displayed time matches Clover's wall-clock time.
+ */
+export function formatDateTimeTz(ms: number, tz: string = "America/New_York"): string {
+  if (!ms) return "—";
+  return new Date(ms).toLocaleString("en-US", {
+    timeZone: tz,
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
 export function relativeTime(ms: number): string {
   if (!ms) return "—";
   const diff = Date.now() - ms;

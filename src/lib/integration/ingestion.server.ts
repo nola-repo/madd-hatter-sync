@@ -8,10 +8,7 @@ import { getSupabaseServer } from "./supabase.server";
 import { syncOrderToGhl } from "./sync.server";
 import { processPendingPurchases } from "./purchase-ops.server";
 import { findPurchaseObjectSchema, validatePurchaseSchema } from "./ghl.server";
-import {
-  createSyncRun,
-  finishSyncRun,
-} from "./sync-run-bookkeeping.server";
+import { createSyncRun, finishSyncRun } from "./sync-run-bookkeeping.server";
 
 import {
   rangeToMs,
@@ -338,7 +335,9 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
 
       // 6. Discounts
       await safe("discounts", async () => {
-        const { elements: discounts } = await cloverPaginate(`/v3/merchants/${merchantId}/discounts`);
+        const { elements: discounts } = await cloverPaginate(
+          `/v3/merchants/${merchantId}/discounts`,
+        );
         counters.discountsFetched = discounts.length;
         for (const d of discounts) await upsertDiscount(merchantId, d);
       });
@@ -371,6 +370,30 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
         );
         orders = r.elements;
         pages = r.pages;
+      }
+      // For incremental cron, ALSO pull recently-modified orders so status
+      // changes (OPEN→PAID, voids, line-item edits) refresh in our DB.
+      // createdTime only catches new orders; modifiedTime catches state
+      // changes on already-ingested ones — the fix for stale OPEN orders
+      // that are paid in Clover but still show OPEN here. Best-effort: a
+      // failure never aborts the run (the 10s order-loop guard still bounds it).
+      if (kind === "incremental") {
+        try {
+          const modCutoff = Date.now() - 20 * 60_000; // last 20 min
+          const r = await cloverPaginate(
+            `/v3/merchants/${merchantId}/orders?expand=lineItems,payments,refunds,customers&filter=modifiedTime>=${modCutoff}`,
+            { limit: 100, maxPages: 2, extraParams: "orderBy=modifiedTime+DESC" },
+          );
+          const seen = new Set(orders.map((o: any) => o.id));
+          for (const o of r.elements) {
+            if (!seen.has(o.id)) {
+              orders.push(o);
+              seen.add(o.id);
+            }
+          }
+        } catch {
+          /* modifiedTime refresh is best-effort; don't fail the run */
+        }
       }
       counters.ordersFetched = orders.length;
       recon.ordersFetched = orders.length;
