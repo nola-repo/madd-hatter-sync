@@ -59,6 +59,10 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-clay-bg: var(--clay-bg);
   --color-clay-card: var(--clay-card);
   --color-clay-input: var(--clay-input);
@@ -70,23 +74,27 @@
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(0.985 0.004 145);
-  --foreground: oklch(0.18 0.03 165);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.03 165);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.03 165);
+  --radius: 0.75rem;
+  --background: oklch(0.975 0.006 130);
+  --foreground: oklch(0.22 0.02 150);
+  --card: oklch(0.995 0.002 130);
+  --card-foreground: oklch(0.22 0.02 150);
+  --popover: oklch(0.995 0.002 130);
+  --popover-foreground: oklch(0.22 0.02 150);
   --primary: oklch(0.45 0.13 165);
   --primary-foreground: oklch(0.985 0.004 145);
   --secondary: oklch(0.95 0.02 145);
   --secondary-foreground: oklch(0.25 0.04 165);
-  --muted: oklch(0.96 0.012 145);
+  --muted: oklch(0.95 0.012 145);
   --muted-foreground: oklch(0.5 0.03 165);
   --accent: oklch(0.72 0.15 75);
   --accent-foreground: oklch(0.2 0.04 75);
   --destructive: oklch(0.55 0.22 25);
   --destructive-foreground: oklch(0.985 0.004 145);
+  --success: oklch(0.55 0.14 160);
+  --success-foreground: oklch(0.985 0.004 145);
+  --warning: oklch(0.75 0.15 75);
+  --warning-foreground: oklch(0.25 0.05 75);
   --border: oklch(0.9 0.015 145);
   --input: oklch(0.9 0.015 145);
   --ring: oklch(0.45 0.13 165);
@@ -95,13 +103,13 @@
   --chart-3: oklch(0.5 0.18 250);
   --chart-4: oklch(0.65 0.2 30);
   --chart-5: oklch(0.55 0.15 305);
-  --sidebar: oklch(0.985 0.004 145);
-  --sidebar-foreground: oklch(0.18 0.03 165);
+  --sidebar: oklch(0.985 0.005 130);
+  --sidebar-foreground: oklch(0.22 0.02 150);
   --sidebar-primary: oklch(0.45 0.13 165);
   --sidebar-primary-foreground: oklch(0.985 0.004 145);
   --sidebar-accent: oklch(0.95 0.02 145);
   --sidebar-accent-foreground: oklch(0.25 0.04 165);
-  --sidebar-border: oklch(0.9 0.015 145);
+  --sidebar-border: oklch(0.9 0.012 130);
   --sidebar-ring: oklch(0.45 0.13 165);
   /* Claymorphism auth surface — warm cream clay with soft 3D depth. */
   --clay-bg: oklch(0.975 0.008 100);
@@ -115,38 +123,49 @@
 }
 
 .dark {
-  --background: oklch(0.129 0.042 264.695);
-  --foreground: oklch(0.984 0.003 247.858);
-  --card: oklch(0.208 0.042 265.755);
-  --card-foreground: oklch(0.984 0.003 247.858);
-  --popover: oklch(0.208 0.042 265.755);
-  --popover-foreground: oklch(0.984 0.003 247.858);
-  --primary: oklch(0.929 0.013 255.508);
-  --primary-foreground: oklch(0.208 0.042 265.755);
-  --secondary: oklch(0.279 0.041 260.031);
-  --secondary-foreground: oklch(0.984 0.003 247.858);
-  --muted: oklch(0.279 0.041 260.031);
-  --muted-foreground: oklch(0.704 0.04 256.788);
-  --accent: oklch(0.279 0.041 260.031);
-  --accent-foreground: oklch(0.984 0.003 247.858);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.984 0.003 247.858);
+  --background: oklch(0.16 0.02 160);
+  --foreground: oklch(0.96 0.005 145);
+  --card: oklch(0.2 0.02 160);
+  --card-foreground: oklch(0.96 0.005 145);
+  --popover: oklch(0.2 0.02 160);
+  --popover-foreground: oklch(0.96 0.005 145);
+  --primary: oklch(0.6 0.15 160);
+  --primary-foreground: oklch(0.16 0.02 160);
+  --secondary: oklch(0.26 0.02 160);
+  --secondary-foreground: oklch(0.96 0.005 145);
+  --muted: oklch(0.26 0.02 160);
+  --muted-foreground: oklch(0.7 0.02 145);
+  --accent: oklch(0.45 0.15 75);
+  --accent-foreground: oklch(0.98 0.005 75);
+  --destructive: oklch(0.6 0.2 25);
+  --destructive-foreground: oklch(0.98 0.005 25);
+  --success: oklch(0.6 0.15 160);
+  --success-foreground: oklch(0.16 0.02 160);
+  --warning: oklch(0.7 0.15 75);
+  --warning-foreground: oklch(0.16 0.02 75);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.551 0.027 264.364);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.208 0.042 265.755);
-  --sidebar-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
-  --sidebar-accent: oklch(0.279 0.041 260.031);
-  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
+  --ring: oklch(0.6 0.15 160);
+  --chart-1: oklch(0.55 0.16 160);
+  --chart-2: oklch(0.7 0.16 75);
+  --chart-3: oklch(0.6 0.18 250);
+  --chart-4: oklch(0.65 0.2 30);
+  --chart-5: oklch(0.6 0.15 305);
+  --sidebar: oklch(0.2 0.02 160);
+  --sidebar-foreground: oklch(0.96 0.005 145);
+  --sidebar-primary: oklch(0.6 0.15 160);
+  --sidebar-primary-foreground: oklch(0.98 0.005 145);
+  --sidebar-accent: oklch(0.26 0.02 160);
+  --sidebar-accent-foreground: oklch(0.96 0.005 145);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.551 0.027 264.364);
+  --sidebar-ring: oklch(0.6 0.15 160);
+  --clay-bg: oklch(0.14 0.02 100);
+  --clay-card: oklch(0.2 0.02 100);
+  --clay-input: oklch(0.24 0.02 82);
+  --clay-text: oklch(0.92 0.01 60);
+  --clay-muted: oklch(0.7 0.02 65);
+  --clay-primary: oklch(0.55 0.15 155);
+  --clay-primary-foreground: oklch(0.98 0.005 145);
 }
 
 @layer base {
@@ -157,39 +176,43 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-family: var(--clay-font);
+    font-feature-settings: "ss01" 1;
   }
 }
 
 /* ----------------------------------------------------------------------------
- * Claymorphism utilities — soft 3D clay surfaces for the auth pages.
+ * Claymorphism utilities — soft 3D clay surfaces for cards & interactive
+ * controls. Used selectively on major cards and the auth pages; data-heavy
+ * tables stay clean and readable.
  * -------------------------------------------------------------------------- */
 @utility clay-surface {
   background-color: var(--clay-card);
-  border-radius: 2rem;
+  border-radius: 1.5rem;
   border: 1px solid color-mix(in oklab, var(--clay-card) 60%, white 40%);
   box-shadow:
-    -10px -10px 24px color-mix(in oklab, white 70%, transparent),
-    14px 14px 36px color-mix(in oklab, var(--clay-text) 22%, transparent);
+    -8px -8px 20px color-mix(in oklab, white 60%, transparent),
+    12px 12px 32px color-mix(in oklab, var(--clay-text) 16%, transparent);
 }
 
 @utility clay-inset {
   background-color: var(--clay-input);
-  border-radius: 999px;
+  border-radius: 9999px;
   border: 1px solid color-mix(in oklab, var(--clay-input) 70%, white 30%);
   box-shadow:
-    inset 4px 4px 10px color-mix(in oklab, var(--clay-text) 18%, transparent),
-    inset -3px -3px 8px color-mix(in oklab, white 55%, transparent);
+    inset 3px 3px 8px color-mix(in oklab, var(--clay-text) 16%, transparent),
+    inset -2px -2px 6px color-mix(in oklab, white 50%, transparent);
 }
 
 @utility clay-button {
   background-color: var(--clay-primary);
   color: var(--clay-primary-foreground);
-  border-radius: 999px;
+  border-radius: 9999px;
   border: 1px solid color-mix(in oklab, var(--clay-primary) 80%, white 20%);
   box-shadow:
-    -5px -5px 12px color-mix(in oklab, white 55%, transparent),
-    8px 8px 18px color-mix(in oklab, var(--clay-primary) 55%, transparent),
-    inset 0 2px 3px color-mix(in oklab, white 30%, transparent);
+    -4px -4px 10px color-mix(in oklab, white 50%, transparent),
+    6px 6px 16px color-mix(in oklab, var(--clay-primary) 50%, transparent),
+    inset 0 2px 3px color-mix(in oklab, white 28%, transparent);
   transition:
     transform 0.15s ease,
     box-shadow 0.15s ease;
@@ -198,14 +221,42 @@
   &:hover {
     transform: translateY(-1px);
     box-shadow:
-      -6px -6px 14px color-mix(in oklab, white 60%, transparent),
-      10px 10px 22px color-mix(in oklab, var(--clay-primary) 60%, transparent),
-      inset 0 2px 3px color-mix(in oklab, white 35%, transparent);
+      -5px -5px 12px color-mix(in oklab, white 55%, transparent),
+      8px 8px 18px color-mix(in oklab, var(--clay-primary) 55%, transparent),
+      inset 0 2px 3px color-mix(in oklab, white 32%, transparent);
   }
   &:active {
     transform: translateY(0);
     box-shadow:
-      inset 4px 4px 10px color-mix(in oklab, var(--clay-primary) 60%, transparent),
-      inset -3px -3px 8px color-mix(in oklab, white 25%, transparent);
+      inset 3px 3px 8px color-mix(in oklab, var(--clay-primary) 55%, transparent),
+      inset -2px -2px 6px color-mix(in oklab, white 22%, transparent);
   }
+}
+
+/* Soft clay card — a lighter version for the admin content cards. */
+@utility soft-card {
+  background-color: var(--card);
+  border-radius: var(--radius-2xl);
+  border: 1px solid var(--border);
+  box-shadow:
+    -4px -4px 12px color-mix(in oklab, white 40%, transparent),
+    8px 8px 24px color-mix(in oklab, var(--foreground) 6%, transparent);
+}
+
+/* Stat card — success (green) treatment for sync/log-related metrics. */
+@utility stat-success {
+  background-color: color-mix(in oklab, var(--success) 8%, var(--card));
+  border-color: color-mix(in oklab, var(--success) 25%, var(--border));
+}
+
+/* Stat card — warning (amber) treatment for pending/needs-attention metrics. */
+@utility stat-warning {
+  background-color: color-mix(in oklab, var(--warning) 10%, var(--card));
+  border-color: color-mix(in oklab, var(--warning) 25%, var(--border));
+}
+
+/* Stat card — destructive (red) treatment for failed/error metrics. */
+@utility stat-error {
+  background-color: color-mix(in oklab, var(--destructive) 8%, var(--card));
+  border-color: color-mix(in oklab, var(--destructive) 22%, var(--border));
 }

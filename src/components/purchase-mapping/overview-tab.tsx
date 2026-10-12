@@ -68,62 +68,72 @@ export function MappingOverviewTab({
         <StatCard
           label="Clover Customers"
           value={stats.totalCloverCustomers}
-          icon={<Users className="h-4 w-4" />}
+          icon={<Users className="h-3.5 w-3.5" />}
         />
         <StatCard
           label="With Purchases"
           value={stats.customersWithPurchases}
-          icon={<Users className="h-4 w-4" />}
+          icon={<Users className="h-3.5 w-3.5" />}
         />
         <StatCard
           label="Matched CRM"
           value={stats.matchedGhlContacts}
-          icon={<CheckCircle2 className="h-4 w-4" />}
+          icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+          tone="success"
         />
         <StatCard
           label="Verified Mappings"
           value={stats.verifiedMappings}
-          icon={<CheckCircle2 className="h-4 w-4" />}
+          icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+          tone="success"
         />
         <StatCard
           label="Unmatched"
           value={stats.unmatchedCustomers}
-          icon={<AlertTriangle className="h-4 w-4" />}
+          icon={<AlertTriangle className="h-3.5 w-3.5" />}
+          tone="warning"
         />
         <StatCard
           label="Needs Review"
           value={stats.needsReview}
-          icon={<AlertTriangle className="h-4 w-4" />}
+          icon={<AlertTriangle className="h-3.5 w-3.5" />}
+          tone="warning"
         />
         <StatCard
           label="Conflicts"
           value={stats.conflicts}
-          icon={<AlertTriangle className="h-4 w-4" />}
+          icon={<AlertTriangle className="h-3.5 w-3.5" />}
+          tone="error"
         />
         <StatCard
           label="Tags Applied"
           value={stats.tagsApplied}
-          icon={<Tag className="h-4 w-4" />}
+          icon={<Tag className="h-3.5 w-3.5" />}
+          tone="success"
         />
         <StatCard
           label="Tags Verified"
           value={stats.tagsVerified}
-          icon={<CheckCircle2 className="h-4 w-4" />}
+          icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+          tone="success"
         />
         <StatCard
           label="Tags Failed"
           value={stats.tagsFailed}
-          icon={<AlertTriangle className="h-4 w-4" />}
+          icon={<AlertTriangle className="h-3.5 w-3.5" />}
+          tone="error"
         />
         <StatCard
           label="Out of Sync"
           value={stats.outOfSync}
-          icon={<AlertTriangle className="h-4 w-4" />}
+          icon={<AlertTriangle className="h-3.5 w-3.5" />}
+          tone="warning"
         />
         <StatCard
           label="Skipped (No Identifiers)"
           value={stats.skippedNoIdentifiers ?? skippedNoIdentifiers}
-          icon={<AlertTriangle className="h-4 w-4" />}
+          icon={<AlertTriangle className="h-3.5 w-3.5" />}
+          tone="warning"
         />
       </div>
 
@@ -160,19 +170,19 @@ function CustomerTable({ rows }: { rows: MappingTableRow[] }) {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border text-left text-xs text-muted-foreground">
-            <th className="pb-2 pr-4 font-medium">Customer</th>
-            <th className="pb-2 pr-4 font-medium">Email / Phone</th>
-            <th className="pb-2 pr-4 font-medium">Purchases</th>
-            <th className="pb-2 pr-4 font-medium">CRM Contact</th>
-            <th className="pb-2 pr-4 font-medium">Match Method</th>
-            <th className="pb-2 pr-4 font-medium">Match Status</th>
-            <th className="pb-2 pr-4 font-medium">Tags</th>
-            <th className="pb-2 font-medium">Sync</th>
+            <th className="pb-3 pr-4 font-bold uppercase tracking-wide">Customer</th>
+            <th className="pb-3 pr-4 font-bold uppercase tracking-wide">Email / Phone</th>
+            <th className="pb-3 pr-4 font-bold uppercase tracking-wide">Purchases</th>
+            <th className="pb-3 pr-4 font-bold uppercase tracking-wide">CRM Contact</th>
+            <th className="pb-3 pr-4 font-bold uppercase tracking-wide">Match Method</th>
+            <th className="pb-3 pr-4 font-bold uppercase tracking-wide">Match Status</th>
+            <th className="pb-3 pr-4 font-bold uppercase tracking-wide">Tags</th>
+            <th className="pb-3 font-bold uppercase tracking-wide">Sync</th>
           </tr>
         </thead>
         <tbody>
           {pagedRows.map((c, i) => (
-            <tr key={i} className="border-b border-border/50">
+            <tr key={i} className="border-b border-border/40 transition-colors hover:bg-muted/30">
               <td className="py-2.5 pr-4 font-medium text-foreground">{c.customerName}</td>
               <td className="py-2.5 pr-4 text-xs text-muted-foreground">
                 {c.email || c.phone || "—"}

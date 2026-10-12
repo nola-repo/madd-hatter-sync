@@ -22,24 +22,37 @@ export const Route = createFileRoute("/pending-approval")({
 
 function PendingApprovalPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/40 px-4">
-      <div className="w-full max-w-md rounded-xl border border-border bg-card p-8 text-center shadow-sm">
-        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent/15">
-          <span className="text-xl">⏳</span>
+    <div
+      className="flex min-h-screen items-center justify-center px-4"
+      style={{
+        backgroundColor: "var(--clay-bg)",
+        fontFamily: "var(--clay-font)",
+      }}
+    >
+      <div className="clay-surface w-full max-w-md p-8 text-center sm:p-10">
+        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-[var(--clay-primary)]/10">
+          <span className="text-3xl">🎩</span>
         </div>
-        <h1 className="text-xl font-semibold text-foreground">Your account is pending approval</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          You're signed in, but an administrator still needs to approve your account before you can
-          access the dashboard. Please check back shortly.
+        <h1
+          className="text-2xl font-extrabold tracking-tight"
+          style={{ color: "var(--clay-text)" }}
+        >
+          Thanks for signing up!
+        </h1>
+        <p className="mt-3 text-sm leading-relaxed" style={{ color: "var(--clay-muted)" }}>
+          Your account has been created and is waiting for approval from the Madd Hatter Sync
+          administrator. We've notified them by email — you'll be able to sign in as soon as your
+          account is approved. This usually doesn't take long.
         </p>
-        <div className="mt-6 flex flex-col gap-2">
-          <Link
-            to="/login"
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            Back to sign in
-          </Link>
-        </div>
+        <p className="mt-2 text-xs" style={{ color: "var(--clay-muted)" }}>
+          Didn't get a confirmation? Check your spam folder.
+        </p>
+        <Link
+          to="/login"
+          className="clay-button mt-7 flex h-12 w-full items-center justify-center gap-2 text-base font-bold"
+        >
+          Back to sign in
+        </Link>
       </div>
     </div>
   );

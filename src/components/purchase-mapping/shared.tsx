@@ -42,23 +42,52 @@ export const SYNC_COLORS: Record<string, string> = {
   NOT_PAID: "outline",
 };
 
+/**
+ * StatCard — success variant uses the green treatment for sync/log-related
+ * positive metrics. Pass `tone="success" | "warning" | "error"` for semantic
+ * coloring; default is neutral.
+ */
 export function StatCard({
   label,
   value,
   icon,
+  tone = "neutral",
 }: {
   label: string;
   value: number | string;
   icon: ReactNode;
+  tone?: "neutral" | "success" | "warning" | "error";
 }) {
+  const toneClass =
+    tone === "success"
+      ? "stat-success"
+      : tone === "warning"
+        ? "stat-warning"
+        : tone === "error"
+          ? "stat-error"
+          : "";
+  const iconBg =
+    tone === "success"
+      ? "bg-success/15 text-success"
+      : tone === "warning"
+        ? "bg-warning/20 text-warning"
+        : tone === "error"
+          ? "bg-destructive/15 text-destructive"
+          : "bg-primary/10 text-primary";
   return (
-    <Card>
+    <Card className={toneClass}>
       <CardContent className="p-4">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-muted-foreground">{label}</span>
-          {icon}
+          <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+            {label}
+          </span>
+          <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${iconBg}`}>
+            {icon}
+          </span>
         </div>
-        <p className="mt-1 truncate text-xl font-semibold text-foreground">{value}</p>
+        <p className="mt-2 truncate text-xl font-extrabold tracking-tight text-foreground">
+          {value}
+        </p>
       </CardContent>
     </Card>
   );
@@ -67,8 +96,8 @@ export function StatCard({
 export function SummaryStat({ label, value }: { label: string; value: number }) {
   return (
     <div>
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <p className="font-semibold">{value}</p>
+      <span className="text-xs font-bold text-muted-foreground">{label}</span>
+      <p className="text-base font-extrabold text-foreground">{value}</p>
     </div>
   );
 }

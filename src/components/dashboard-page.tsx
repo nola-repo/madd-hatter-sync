@@ -136,14 +136,20 @@ export function DashboardPage() {
         {cards.map((c) => {
           const Icon = c.icon;
           return (
-            <Card key={c.label}>
+            <Card key={c.label} className="overflow-hidden">
               <CardContent className="pt-5">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-muted-foreground">{c.label}</span>
-                  <Icon className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                    {c.label}
+                  </span>
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary/10">
+                    <Icon className="h-4 w-4 text-primary" />
+                  </span>
                 </div>
-                <div className="mt-2 text-2xl font-bold text-foreground">{c.value}</div>
-                <div className="mt-1 text-xs text-muted-foreground">{c.sub}</div>
+                <div className="mt-3 text-2xl font-extrabold tracking-tight text-foreground">
+                  {c.value}
+                </div>
+                <div className="mt-1 text-xs font-medium text-muted-foreground">{c.sub}</div>
               </CardContent>
             </Card>
           );

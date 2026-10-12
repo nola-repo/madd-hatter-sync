@@ -21,7 +21,6 @@ import {
   UserCog,
 } from "lucide-react";
 import { HatIcon } from "./brand-icon";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { isSuperAdminEmail } from "@/lib/integration/super-admin";
@@ -115,18 +114,18 @@ export function AdminShell({
           <button
             onClick={() => toggleGroup(index)}
             className={cn(
-              "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold transition-colors",
               hasActiveChild
                 ? "text-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
             )}
           >
-            <Icon className="h-4 w-4" />
+            <Icon className="h-4.5 w-4.5" />
             <span className="flex-1 text-left">{entry.label}</span>
             <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
           </button>
           {open && (
-            <div className="ml-4 mt-0.5 flex flex-col gap-0.5 border-l border-border pl-3">
+            <div className="ml-4 mt-1 flex flex-col gap-0.5 border-l border-border/60 pl-3">
               {entry.children.map((child) => {
                 const CIcon = child.icon;
                 const active = isActive(child.to);
@@ -137,17 +136,19 @@ export function AdminShell({
                     to={child.to}
                     onClick={() => setMobileOpen(false)}
                     className={cn(
-                      "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-[13px] transition-colors",
+                      "flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition-colors",
                       active
-                        ? "bg-primary/10 font-medium text-primary"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                        ? "bg-primary/10 font-bold text-primary"
+                        : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
                       soon && "pointer-events-none opacity-50",
                     )}
                   >
                     <CIcon className="h-3.5 w-3.5" />
                     {child.label}
                     {soon && (
-                      <span className="ml-auto text-[10px] text-muted-foreground">Soon</span>
+                      <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-bold text-muted-foreground">
+                        Soon
+                      </span>
                     )}
                   </Link>
                 );
@@ -165,13 +166,13 @@ export function AdminShell({
         to={entry.to}
         onClick={() => setMobileOpen(false)}
         className={cn(
-          "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+          "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold transition-colors",
           active
             ? "bg-primary/10 text-primary"
-            : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
         )}
       >
-        <Icon className="h-4 w-4" />
+        <Icon className="h-4.5 w-4.5" />
         {entry.label}
       </Link>
     );
@@ -181,10 +182,12 @@ export function AdminShell({
 
   const brand = (
     <Link to="/admin" className="flex items-center gap-2.5 px-5 py-5">
-      <HatIcon className="h-7 w-7 text-primary" />
+      <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-primary/10">
+        <HatIcon className="h-5.5 w-5.5 text-primary" />
+      </span>
       <div className="leading-tight">
-        <div className="text-sm font-semibold text-foreground">Madd Hatter</div>
-        <div className="text-[11px] text-muted-foreground">POS Sync</div>
+        <div className="text-sm font-extrabold text-foreground">Madd Hatter</div>
+        <div className="text-[11px] font-semibold text-muted-foreground">POS Sync</div>
       </div>
     </Link>
   );
@@ -200,19 +203,24 @@ export function AdminShell({
           aria-haspopup="menu"
           aria-expanded={menuOpen}
           aria-label="Open user menu"
-          className="flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted"
+          className="flex w-full items-center gap-2.5 rounded-2xl bg-muted/40 px-2.5 py-2.5 text-left transition-colors hover:bg-muted"
         >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-sm font-extrabold text-primary">
             {initial}
           </span>
-          <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
+          <span className="min-w-0 flex-1 truncate text-xs font-bold text-foreground">
             {email ?? "User"}
           </span>
           <MoreHorizontal className="h-4 w-4 shrink-0 text-muted-foreground" />
         </button>
       </PopoverTrigger>
-      <PopoverContent side="top" align="start" sideOffset={6} className="w-60 p-1.5">
-        <div className="truncate px-2 py-1.5 text-[11px] text-muted-foreground" title={email ?? ""}>
+      <PopoverContent
+        side="top"
+        align="start"
+        sideOffset={8}
+        className="w-64 rounded-2xl p-1.5"
+      >
+        <div className="truncate px-2.5 py-2 text-[11px] font-semibold text-muted-foreground" title={email ?? ""}>
           {email ?? ""}
         </div>
         <div className="h-px bg-border" />
@@ -223,7 +231,7 @@ export function AdminShell({
             setMenuOpen(false);
             setMobileOpen(false);
           }}
-          className="flex items-center gap-2.5 rounded-sm px-2 py-2 text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-sm font-bold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <UserIcon className="h-4 w-4" />
           Profile
@@ -235,7 +243,7 @@ export function AdminShell({
             setMenuOpen(false);
             setMobileOpen(false);
           }}
-          className="flex items-center gap-2.5 rounded-sm px-2 py-2 text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-sm font-bold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Settings className="h-4 w-4" />
           Settings
@@ -248,7 +256,7 @@ export function AdminShell({
               setMenuOpen(false);
               setMobileOpen(false);
             }}
-            className="flex items-center gap-2.5 rounded-sm px-2 py-2 text-sm text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-sm font-bold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <UserCog className="h-4 w-4" />
             User Management
@@ -263,7 +271,7 @@ export function AdminShell({
             setMobileOpen(false);
             onLogout();
           }}
-          className="flex w-full items-center gap-2.5 rounded-sm px-2 py-2 text-left text-sm text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-left text-sm font-bold text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <LogOut className="h-4 w-4" />
           Log out
@@ -272,46 +280,45 @@ export function AdminShell({
     </Popover>
   );
 
-  const footer = <div className="mt-auto border-t border-border px-3 py-3">{userChip}</div>;
+  const footer = (
+    <div className="mt-auto border-t border-border/60 px-3 py-3">{userChip}</div>
+  );
 
   return (
-    <div className="min-h-screen bg-muted/30">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-border bg-background lg:flex">
+    <div className="min-h-screen bg-muted/20">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-border/60 bg-sidebar lg:flex">
         {brand}
         {navList}
         {footer}
       </aside>
 
-      <div className="flex h-14 items-center justify-between border-b border-border bg-background px-4 lg:hidden">
+      <div className="flex h-14 items-center justify-between border-b border-border/60 bg-background px-4 lg:hidden">
         <Link to="/admin" className="flex items-center gap-2">
           <HatIcon className="h-6 w-6 text-primary" />
-          <span className="text-sm font-semibold text-foreground">Madd Hatter POS</span>
+          <span className="text-sm font-extrabold text-foreground">Madd Hatter POS</span>
         </Link>
-        <Button
-          variant="ghost"
-          size="icon"
+        <button
           onClick={() => setMobileOpen(true)}
           aria-label="Open menu"
+          className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-muted"
         >
           <Menu className="h-5 w-5" />
-        </Button>
+        </button>
       </div>
 
       {mobileOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-foreground/40" onClick={() => setMobileOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 flex w-64 flex-col border-r border-border bg-background shadow-xl">
+          <aside className="absolute inset-y-0 left-0 flex w-64 flex-col border-r border-border/60 bg-background shadow-xl">
             <div className="flex items-center justify-between">
               {brand}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="mr-2"
+              <button
+                className="mr-2 flex h-9 w-9 items-center justify-center rounded-xl hover:bg-muted"
                 onClick={() => setMobileOpen(false)}
                 aria-label="Close menu"
               >
                 <X className="h-5 w-5" />
-              </Button>
+              </button>
             </div>
             {navList}
             {footer}
