@@ -15,6 +15,7 @@ import { Terminal, RefreshCw, CheckCircle2, AlertTriangle, Loader2, Clock } from
 import { useServerFn } from "@tanstack/react-start";
 import { getSyncLogsFn } from "@/lib/integration/product-functions";
 import { formatDateTime, relativeTime } from "@/lib/integration/format";
+import { usePagination, Pager } from "@/components/purchase-mapping/pagination";
 import type { SyncLogEntry } from "@/lib/integration/product-mapping.server";
 
 const POLL_INTERVAL_MS = 15_000;
@@ -27,6 +28,11 @@ export function SyncLogsPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<number | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // 15-per-page pagination, resets to page 1 on each fresh load.
+  const { page, setPage, totalPages, pagedLogs, total } = usePagination<SyncLogEntry>(logs, [
+    logs.length,
+  ]);
 
   const loadLogs = useCallback(
     async (corrId?: string) => {
@@ -195,7 +201,7 @@ export function SyncLogsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {logs.map((log) => (
+                  {pagedLogs.map((log) => (
                     <TableRow key={log.id}>
                       <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                         {formatDateTime(new Date(log.createdAt).getTime())}
@@ -242,6 +248,9 @@ export function SyncLogsPage() {
               </Table>
             </div>
           )}
+          <div className="px-4 pb-4">
+            <Pager page={page} totalPages={totalPages} setPage={setPage} total={total} />
+          </div>
         </CardContent>
       </Card>
     </div>
