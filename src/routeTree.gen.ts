@@ -29,6 +29,7 @@ import { Route as AuthenticatedAdminLogsRouteImport } from './routes/_authentica
 import { Route as AuthenticatedAdminModifiersRouteImport } from './routes/_authenticated/admin.modifiers'
 import { Route as AuthenticatedAdminOrdersRouteImport } from './routes/_authenticated/admin.orders'
 import { Route as AuthenticatedAdminPosDataRouteImport } from './routes/_authenticated/admin.pos-data'
+import { Route as AuthenticatedAdminProductBuyerSearchRouteImport } from './routes/_authenticated/admin.product-buyer-search'
 import { Route as AuthenticatedAdminProductMappingRouteImport } from './routes/_authenticated/admin.product-mapping'
 import { Route as AuthenticatedAdminProductsRouteImport } from './routes/_authenticated/admin.products'
 import { Route as AuthenticatedAdminProfileRouteImport } from './routes/_authenticated/admin.profile'
@@ -150,6 +151,12 @@ const AuthenticatedAdminPosDataRoute =
     path: '/pos-data',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminProductBuyerSearchRoute =
+  AuthenticatedAdminProductBuyerSearchRouteImport.update({
+    id: '/product-buyer-search',
+    path: '/product-buyer-search',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const AuthenticatedAdminProductMappingRoute =
   AuthenticatedAdminProductMappingRouteImport.update({
     id: '/product-mapping',
@@ -243,6 +250,7 @@ export interface FileRoutesByFullPath {
   '/admin/modifiers': typeof AuthenticatedAdminModifiersRoute
   '/admin/orders': typeof AuthenticatedAdminOrdersRoute
   '/admin/pos-data': typeof AuthenticatedAdminPosDataRoute
+  '/admin/product-buyer-search': typeof AuthenticatedAdminProductBuyerSearchRoute
   '/admin/product-mapping': typeof AuthenticatedAdminProductMappingRoute
   '/admin/products': typeof AuthenticatedAdminProductsRoute
   '/admin/profile': typeof AuthenticatedAdminProfileRoute
@@ -276,6 +284,7 @@ export interface FileRoutesByTo {
   '/admin/modifiers': typeof AuthenticatedAdminModifiersRoute
   '/admin/orders': typeof AuthenticatedAdminOrdersRoute
   '/admin/pos-data': typeof AuthenticatedAdminPosDataRoute
+  '/admin/product-buyer-search': typeof AuthenticatedAdminProductBuyerSearchRoute
   '/admin/product-mapping': typeof AuthenticatedAdminProductMappingRoute
   '/admin/products': typeof AuthenticatedAdminProductsRoute
   '/admin/profile': typeof AuthenticatedAdminProfileRoute
@@ -312,6 +321,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/modifiers': typeof AuthenticatedAdminModifiersRoute
   '/_authenticated/admin/orders': typeof AuthenticatedAdminOrdersRoute
   '/_authenticated/admin/pos-data': typeof AuthenticatedAdminPosDataRoute
+  '/_authenticated/admin/product-buyer-search': typeof AuthenticatedAdminProductBuyerSearchRoute
   '/_authenticated/admin/product-mapping': typeof AuthenticatedAdminProductMappingRoute
   '/_authenticated/admin/products': typeof AuthenticatedAdminProductsRoute
   '/_authenticated/admin/profile': typeof AuthenticatedAdminProfileRoute
@@ -348,6 +358,7 @@ export interface FileRouteTypes {
     | '/admin/modifiers'
     | '/admin/orders'
     | '/admin/pos-data'
+    | '/admin/product-buyer-search'
     | '/admin/product-mapping'
     | '/admin/products'
     | '/admin/profile'
@@ -381,6 +392,7 @@ export interface FileRouteTypes {
     | '/admin/modifiers'
     | '/admin/orders'
     | '/admin/pos-data'
+    | '/admin/product-buyer-search'
     | '/admin/product-mapping'
     | '/admin/products'
     | '/admin/profile'
@@ -416,6 +428,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/modifiers'
     | '/_authenticated/admin/orders'
     | '/_authenticated/admin/pos-data'
+    | '/_authenticated/admin/product-buyer-search'
     | '/_authenticated/admin/product-mapping'
     | '/_authenticated/admin/products'
     | '/_authenticated/admin/profile'
@@ -589,6 +602,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminPosDataRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/product-buyer-search': {
+      id: '/_authenticated/admin/product-buyer-search'
+      path: '/product-buyer-search'
+      fullPath: '/admin/product-buyer-search'
+      preLoaderRoute: typeof AuthenticatedAdminProductBuyerSearchRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/product-mapping': {
       id: '/_authenticated/admin/product-mapping'
       path: '/product-mapping'
@@ -694,6 +714,7 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminModifiersRoute: typeof AuthenticatedAdminModifiersRoute
   AuthenticatedAdminOrdersRoute: typeof AuthenticatedAdminOrdersRoute
   AuthenticatedAdminPosDataRoute: typeof AuthenticatedAdminPosDataRoute
+  AuthenticatedAdminProductBuyerSearchRoute: typeof AuthenticatedAdminProductBuyerSearchRoute
   AuthenticatedAdminProductMappingRoute: typeof AuthenticatedAdminProductMappingRoute
   AuthenticatedAdminProductsRoute: typeof AuthenticatedAdminProductsRoute
   AuthenticatedAdminProfileRoute: typeof AuthenticatedAdminProfileRoute
@@ -717,6 +738,8 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminModifiersRoute: AuthenticatedAdminModifiersRoute,
   AuthenticatedAdminOrdersRoute: AuthenticatedAdminOrdersRoute,
   AuthenticatedAdminPosDataRoute: AuthenticatedAdminPosDataRoute,
+  AuthenticatedAdminProductBuyerSearchRoute:
+    AuthenticatedAdminProductBuyerSearchRoute,
   AuthenticatedAdminProductMappingRoute: AuthenticatedAdminProductMappingRoute,
   AuthenticatedAdminProductsRoute: AuthenticatedAdminProductsRoute,
   AuthenticatedAdminProfileRoute: AuthenticatedAdminProfileRoute,

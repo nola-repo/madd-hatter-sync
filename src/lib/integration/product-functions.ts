@@ -37,11 +37,25 @@ export const getProductMappingsFn = createServerFn({ method: "GET" }).handler(as
 });
 
 export const searchCustomerPurchasesByItemFn = createServerFn({ method: "POST" })
-  .validator((data) => z.object({ query: z.string() }).parse(data))
+  .validator((data) =>
+    z
+      .object({
+        query: z.string().min(1),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+      })
+      .parse(data),
+  )
   .handler(async ({ data }) => {
     await requireAdmin();
     try {
-      const result = await searchCustomerPurchasesByItem(data.query);
+      let dateOpts: { startMs?: number; endMs?: number } | undefined;
+      if (data.startDate && data.endDate) {
+        const { customDateRange } = await import("./clover-dates.server");
+        const dr = customDateRange(data.startDate, data.endDate);
+        dateOpts = { startMs: dr.startMs, endMs: dr.endMs };
+      }
+      const result = await searchCustomerPurchasesByItem(data.query, dateOpts);
       return { setupRequired: false as const, result };
     } catch (e) {
       if (isSetupRequired(e)) return setupRequiredResponse(e);

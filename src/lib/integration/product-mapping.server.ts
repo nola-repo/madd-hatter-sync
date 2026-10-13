@@ -227,6 +227,7 @@ export async function getProductMappings(): Promise<ProductMappingRow[]> {
 
 export async function searchCustomerPurchasesByItem(
   searchQuery: string,
+  opts?: { startMs?: number; endMs?: number },
 ): Promise<CustomerPurchaseSearchResult> {
   const sb = getSupabaseServer();
   const cfg = getIntegrationConfig();
@@ -248,8 +249,7 @@ export async function searchCustomerPurchasesByItem(
     };
   }
 
-  // 1. Two-phase join: fetch matching order_items first (no broken inner-join
-  //    syntax), then fetch their parent orders separately by clover_order_id.
+  // 1. Fetch matching order_items by product name (or clover_item_id).
   const { data: orderItems, error: oiErr } = await sb
     .from("order_items")
     .select("*")
@@ -279,20 +279,26 @@ export async function searchCustomerPurchasesByItem(
     };
   }
 
-  // 2. Fetch the parent orders for these line items (clean two-phase pattern).
+  // 2. Fetch the parent orders for these line items (with optional date range).
   const orderIds = Array.from(
     new Set(orderItems.map((oi) => oi.clover_order_id).filter(Boolean) as string[]),
   );
-  const { data: orderRows } = await sb
+  let orderQuery = sb
     .from("orders")
     .select("clover_order_id, clover_customer_id, created_time, clover_merchant_id, status")
     .in("clover_order_id", orderIds);
+  if (opts?.startMs) orderQuery = orderQuery.gte("created_time", opts.startMs);
+  if (opts?.endMs) orderQuery = orderQuery.lte("created_time", opts.endMs);
+  const { data: orderRows } = await orderQuery;
   const orderMap = new Map((orderRows ?? []).map((o) => [o.clover_order_id, o]));
 
-  // Collect distinct customer IDs
+  // Filter order items to only those with a parent order in the date range.
+  const inRangeItems = (orderItems ?? []).filter((oi) => orderMap.has(oi.clover_order_id));
+
+  // Collect distinct customer IDs from the in-range items.
   const customerIds = Array.from(
     new Set(
-      orderItems
+      inRangeItems
         .map((oi) => orderMap.get(oi.clover_order_id)?.clover_customer_id)
         .filter(Boolean) as string[],
     ),
@@ -332,7 +338,7 @@ export async function searchCustomerPurchasesByItem(
 
   const buyersList: CustomerPurchaseSearchResult["buyers"] = [];
 
-  for (const oi of orderItems) {
+  for (const oi of inRangeItems) {
     const order = orderMap.get(oi.clover_order_id);
     const cid = order?.clover_customer_id ?? null;
     const cust = cid ? custMap.get(cid) : null;
@@ -391,8 +397,8 @@ export async function searchCustomerPurchasesByItem(
   }
 
   return {
-    itemId: orderItems[0]?.clover_item_id ?? null,
-    itemName: orderItems[0]?.item_name ?? query,
+    itemId: inRangeItems[0]?.clover_item_id ?? null,
+    itemName: inRangeItems[0]?.item_name ?? query,
     canonicalProduct: normName,
     purchaseTag: tagLabel,
     totalBuyers: customerIds.length,

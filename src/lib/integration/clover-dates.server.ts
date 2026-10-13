@@ -169,3 +169,21 @@ export function isoToRange(startDate?: string, endDate?: string): DateRange {
   const endMs = endDate ? new Date(endDate).getTime() : Date.now();
   return { startMs, endMs, label: "all" };
 }
+
+/**
+ * Convert a YYYY-MM-DD start/end date pair (from the product buyer search)
+ * into a DateRange in the merchant timezone. The end date is inclusive of
+ * the full day (23:59:59.999 in merchant TZ) so a range ending October 13
+ * includes purchases throughout October 13, not only at midnight.
+ */
+export function customDateRange(startDate: string, endDate: string): DateRange {
+  const [sy, sm, sd] = startDate.split("-").map(Number);
+  const [ey, em, ed] = endDate.split("-").map(Number);
+  const startWall = new Date(Date.UTC(sy, sm - 1, sd, 0, 0, 0, 0));
+  const endWall = new Date(Date.UTC(ey, em - 1, ed, 23, 59, 59, 999));
+  return {
+    startMs: merchantLocalToUtc(startWall),
+    endMs: merchantLocalToUtc(endWall),
+    label: "all",
+  };
+}

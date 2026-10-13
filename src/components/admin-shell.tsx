@@ -19,6 +19,7 @@ import {
   User as UserIcon,
   LogOut,
   UserCog,
+  Search,
 } from "lucide-react";
 import { HatIcon } from "./brand-icon";
 import { cn } from "@/lib/utils";
@@ -53,6 +54,7 @@ const NAV: NavEntry[] = [
     children: [
       { to: "/admin/analytics", label: "Sales Overview", icon: TrendingUp },
       { to: "/admin/products", label: "Item Sales", icon: Package },
+      { to: "/admin/product-buyer-search", label: "Product Buyer Search", icon: Search },
     ],
   },
   {
@@ -214,13 +216,11 @@ export function AdminShell({
           <MoreHorizontal className="h-4 w-4 shrink-0 text-muted-foreground" />
         </button>
       </PopoverTrigger>
-      <PopoverContent
-        side="top"
-        align="start"
-        sideOffset={8}
-        className="w-64 rounded-2xl p-1.5"
-      >
-        <div className="truncate px-2.5 py-2 text-[11px] font-semibold text-muted-foreground" title={email ?? ""}>
+      <PopoverContent side="top" align="start" sideOffset={8} className="w-64 rounded-2xl p-1.5">
+        <div
+          className="truncate px-2.5 py-2 text-[11px] font-semibold text-muted-foreground"
+          title={email ?? ""}
+        >
           {email ?? ""}
         </div>
         <div className="h-px bg-border" />
@@ -280,9 +280,7 @@ export function AdminShell({
     </Popover>
   );
 
-  const footer = (
-    <div className="mt-auto border-t border-border/60 px-3 py-3">{userChip}</div>
-  );
+  const footer = <div className="mt-auto border-t border-border/60 px-3 py-3">{userChip}</div>;
 
   return (
     <div className="min-h-screen bg-muted/20">
