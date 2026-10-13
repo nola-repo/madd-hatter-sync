@@ -60,16 +60,19 @@ export function SyncLogsPage() {
   );
 
   // Initial load + controlled polling for freshness (not just one-time fetch).
+  // Deps include filterCorrelationId so the interval is torn down and
+  // recreated with the active filter — otherwise the 15s poll captures the
+  // initial empty-filter closure and never picks up a typed filter, making
+  // the page appear stale even though the manual Refresh button works.
   useEffect(() => {
-    void loadLogs();
+    void loadLogs(filterCorrelationId || undefined);
     pollingRef.current = setInterval(() => {
       void loadLogs(filterCorrelationId || undefined);
     }, POLL_INTERVAL_MS);
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [filterCorrelationId, loadLogs]);
 
   // Sync stats — green for success metrics, amber for pending, red for errors.
   const successCount = logs.filter((l) => l.status === "success").length;
