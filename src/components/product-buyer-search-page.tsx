@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/table";
 import { Loader2, Search, Download, AlertTriangle } from "lucide-react";
 import { PageHeader, EmptyState } from "@/components/page-header";
+import { usePagination, Pager } from "@/components/purchase-mapping/pagination";
 import { useServerFn } from "@tanstack/react-start";
 import { searchCustomerPurchasesByItemFn } from "@/lib/integration/product-functions";
 import { money } from "@/lib/integration/format";
@@ -488,6 +489,13 @@ function CustomersTable({ buyers }: { buyers: CustomerPurchaseSearchResult["buye
     customerMap.set(key, ex);
   }
   const customers = Array.from(customerMap.values()).sort((a, b) => b.last - a.last);
+  const {
+    page,
+    setPage,
+    totalPages,
+    pagedRows: pagedCustomers,
+    total,
+  } = usePagination(customers, [buyers]);
 
   return (
     <div className="overflow-x-auto">
@@ -506,7 +514,7 @@ function CustomersTable({ buyers }: { buyers: CustomerPurchaseSearchResult["buye
           </TableRow>
         </TableHeader>
         <TableBody>
-          {customers.map((c) => (
+          {pagedCustomers.map((c) => (
             <TableRow key={c.name}>
               <TableCell className="font-medium text-foreground">{c.name}</TableCell>
               <TableCell className="text-sm text-muted-foreground">{c.phone ?? "—"}</TableCell>
@@ -529,6 +537,9 @@ function CustomersTable({ buyers }: { buyers: CustomerPurchaseSearchResult["buye
           ))}
         </TableBody>
       </Table>
+      <div className="px-4 pb-4">
+        <Pager page={page} totalPages={totalPages} setPage={setPage} total={total} />
+      </div>
     </div>
   );
 }
@@ -540,6 +551,13 @@ function PurchasesTable({
   buyers: CustomerPurchaseSearchResult["buyers"];
   itemName: string;
 }) {
+  const {
+    page,
+    setPage,
+    totalPages,
+    pagedRows: pagedBuyers,
+    total,
+  } = usePagination(buyers, [buyers]);
   return (
     <div className="overflow-x-auto">
       <Table>
@@ -556,7 +574,7 @@ function PurchasesTable({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {buyers.map((b, i) => (
+          {pagedBuyers.map((b, i) => (
             <TableRow key={`${b.cloverOrderId}-${i}`}>
               <TableCell className="font-medium text-foreground">{b.customerName}</TableCell>
               <TableCell className="text-sm text-muted-foreground">
@@ -576,6 +594,9 @@ function PurchasesTable({
           ))}
         </TableBody>
       </Table>
+      <div className="px-4 pb-4">
+        <Pager page={page} totalPages={totalPages} setPage={setPage} total={total} />
+      </div>
     </div>
   );
 }
