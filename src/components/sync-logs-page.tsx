@@ -30,9 +30,13 @@ export function SyncLogsPage() {
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // 15-per-page pagination, resets to page 1 on each fresh load.
-  const { page, setPage, totalPages, pagedLogs, total } = usePagination<SyncLogEntry>(logs, [
-    logs.length,
-  ]);
+  const {
+    page,
+    setPage,
+    totalPages,
+    pagedRows: pagedLogs,
+    total,
+  } = usePagination<SyncLogEntry>(logs, [logs.length]);
 
   const loadLogs = useCallback(
     async (corrId?: string) => {
