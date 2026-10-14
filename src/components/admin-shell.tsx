@@ -20,6 +20,7 @@ import {
   LogOut,
   UserCog,
   Search,
+  UsersRound,
 } from "lucide-react";
 import { HatIcon } from "./brand-icon";
 import { cn } from "@/lib/utils";
