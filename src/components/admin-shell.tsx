@@ -56,6 +56,7 @@ const NAV: NavEntry[] = [
       { to: "/admin/analytics", label: "Sales Overview", icon: TrendingUp },
       { to: "/admin/products", label: "Item Sales", icon: Package },
       { to: "/admin/product-buyer-search", label: "Product Buyer Search", icon: Search },
+      { to: "/admin/audience-builder", label: "Audience Builder", icon: UsersRound },
     ],
   },
   {
