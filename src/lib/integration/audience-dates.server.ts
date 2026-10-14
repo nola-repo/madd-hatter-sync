@@ -237,11 +237,15 @@ export const SUNDAY_FOOTBALL_WINDOWS: Array<[string, string]> = [
   ["2025-09-01", "2026-02-28"],
 ];
 
-/** Returns the event date string if the timestamp falls in any event window. */
+/** Returns the event date string if the timestamp falls in any event window.
+ *  Uses the SAME date-matching logic as the individual audience predicates:
+ *  UFC = 8 PM–6 AM event window; Halloween/Thanksgiving Eve/Day = full calendar
+ *  day. This keeps `repeat_special_event` consistent with the per-audience
+ *  definitions (master plan §3, §4). */
 export function matchEventDate(ms: number): string | null {
   for (const d of UFC_EVENT_DATES) if (inEventWindow(ms, d)) return d;
-  for (const d of HALLOWEEN_DATES) if (inEventWindow(ms, d)) return d;
-  for (const d of THANKSGIVING_EVE_DATES) if (inEventWindow(ms, d)) return d;
+  for (const d of HALLOWEEN_DATES) if (isDate(ms, d)) return d;
+  for (const d of THANKSGIVING_EVE_DATES) if (isDate(ms, d)) return d;
   for (const d of THANKSGIVING_DAY_DATES) if (isDate(ms, d)) return d;
   return null;
 }
