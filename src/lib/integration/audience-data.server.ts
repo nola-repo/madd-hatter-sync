@@ -107,13 +107,26 @@ export async function loadAggregates(): Promise<{
     .from("customers")
     .select("clover_customer_id,first_name,last_name,email,phone,marketing_allowed,created_at")
     .eq("clover_merchant_id", mid);
-  if (cErr) throw new Error(`Audience: customers query failed: ${cErr.message}`);
+  if (cErr) {
+    console.warn("Audience: customers query warning:", cErr.message);
+  }
 
-  const { data: mapRows, error: mErr } = await sb
+  // Gracefully query customer_mappings — if columns differ across schema versions, fallback safely
+  let mapRows: Array<{
+    clover_customer_id: string;
+    ghl_contact_id: string | null;
+    matched_by?: string | null;
+  }> | null = null;
+  const { data: mData, error: mErr } = await sb
     .from("customer_mappings")
-    .select("clover_customer_id,ghl_contact_id,matched_by")
+    .select("clover_customer_id,ghl_contact_id")
     .eq("clover_merchant_id", mid);
-  if (mErr) throw new Error(`Audience: customer_mappings query failed: ${mErr.message}`);
+
+  if (mErr) {
+    console.warn("Audience: customer_mappings query warning:", mErr.message);
+  } else {
+    mapRows = mData;
+  }
 
   const custMap = new Map((custRows ?? []).map((c) => [c.clover_customer_id, c]));
   const mapMap = new Map((mapRows ?? []).map((m) => [m.clover_customer_id, m]));

@@ -76,8 +76,14 @@ export function AudienceBuilderPage() {
         setError("Integration not configured. Please complete setup in Settings.");
         return;
       }
-      const r = res as { result: AudienceResult };
-      setResult(r.result);
+      if (res && "error" in res && res.error) {
+        setError(res.error);
+        setResult(null);
+        return;
+      }
+      if (res && "result" in res && res.result) {
+        setResult(res.result);
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to build audience.";
       setError(msg);
@@ -209,26 +215,30 @@ export function AudienceBuilderPage() {
       </div>
 
       {/* ---- Split-screen workspace ---- */}
-      <div className="grid min-h-[calc(100vh-9rem)] grid-cols-1 gap-5 lg:grid-cols-[minmax(300px,0.8fr)_minmax(0,2.2fr)]">
-        {/* ============ LEFT: Rule builder (sticky) ============ */}
-        <div className="lg:sticky lg:top-4 lg:self-start">
-          <div className="flex h-full flex-col rounded-2xl border border-border bg-card shadow-sm">
-            <div className="flex items-center gap-2 border-b border-border px-5 py-3.5">
+      <div className="grid min-h-[calc(100vh-9rem)] grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(320px,0.85fr)_minmax(0,2.15fr)]">
+        {/* ============ LEFT: Rule builder (sticky card) ============ */}
+        <div className="w-full lg:sticky lg:top-4">
+          <div className="flex flex-col rounded-2xl border border-border bg-card shadow-sm">
+            <div className="flex items-center gap-2 border-b border-border px-5 py-4">
               <Filter className="h-4 w-4 text-primary" />
               <span className="text-sm font-bold text-foreground">Conditions</span>
               {activeConditionCount > 0 && (
-                <Badge className="ml-auto h-5 px-2 text-[11px]">{activeConditionCount}</Badge>
+                <Badge className="ml-auto h-5 px-2 text-[11px] font-semibold">
+                  {activeConditionCount}
+                </Badge>
               )}
             </div>
 
-            <div className="flex-1 space-y-5 overflow-y-auto p-5">
+            <div className="space-y-6 p-5">
               {/* ---- Match ALL (AND) ---- */}
               <div>
-                <div className="mb-2.5 flex items-center gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wide text-primary">
+                <div className="mb-2.5 flex items-baseline gap-2">
+                  <span className="text-xs font-bold uppercase tracking-wider text-primary">
                     Match all
                   </span>
-                  <span className="text-xs text-muted-foreground">· every condition required</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    · every condition required
+                  </span>
                 </div>
                 <div className="space-y-2">
                   {andAudiences.map((id) => (
@@ -241,9 +251,11 @@ export function AudienceBuilderPage() {
                     />
                   ))}
                   {andAudiences.length === 0 && (
-                    <p className="px-1 py-2 text-xs text-muted-foreground">
-                      No required conditions — all customers included.
-                    </p>
+                    <div className="rounded-xl border border-dashed border-border/80 bg-muted/20 px-3 py-2.5 text-center">
+                      <p className="text-xs text-muted-foreground">
+                        No required conditions — all customers included.
+                      </p>
+                    </div>
                   )}
                   <AddCondition
                     groups={groups}
@@ -257,15 +269,15 @@ export function AudienceBuilderPage() {
               {/* ---- Match ANY (OR groups) ---- */}
               <div>
                 <div className="mb-2.5 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold uppercase tracking-wide text-accent-foreground">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-accent-foreground">
                       Match any
                     </span>
-                    <span className="text-xs text-muted-foreground">· groups intersected</span>
+                    <span className="text-[11px] text-muted-foreground">· groups intersected</span>
                   </div>
                   <button
                     onClick={addOrGroup}
-                    className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-bold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold text-primary transition-colors hover:bg-primary/10"
                   >
                     <Plus className="h-3.5 w-3.5" /> Group
                   </button>
@@ -273,15 +285,15 @@ export function AudienceBuilderPage() {
 
                 <div className="space-y-3">
                   {orGroups.map((group, gi) => (
-                    <div key={gi} className="rounded-xl border border-border bg-muted/20 p-3">
-                      <div className="mb-2 flex items-center justify-between">
-                        <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
-                          <Layers className="h-3 w-3" /> Group {gi + 1}
+                    <div key={gi} className="rounded-xl border border-border bg-muted/20 p-3.5">
+                      <div className="mb-2.5 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                          <Layers className="h-3.5 w-3.5 text-primary" /> Group {gi + 1}
                         </span>
                         {orGroups.length > 1 && (
                           <button
                             onClick={() => removeOrGroup(gi)}
-                            className="rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                             aria-label="Remove group"
                           >
                             <X className="h-3.5 w-3.5" />
@@ -299,9 +311,11 @@ export function AudienceBuilderPage() {
                           />
                         ))}
                         {group.length === 0 && (
-                          <p className="px-1 py-1 text-xs text-muted-foreground">
-                            Empty — add a condition.
-                          </p>
+                          <div className="rounded-lg border border-dashed border-border/80 bg-background/50 px-2.5 py-2 text-center">
+                            <p className="text-[11px] text-muted-foreground">
+                              Empty — add a condition below.
+                            </p>
+                          </div>
                         )}
                         <AddCondition
                           groups={groups}
@@ -316,31 +330,34 @@ export function AudienceBuilderPage() {
               </div>
             </div>
 
-            {/* ---- Action bar (inside the rule panel) ---- */}
-            <div className="mt-auto flex items-center gap-2.5 border-t border-border px-5 py-3.5">
-              <Button
-                onClick={runSearch}
-                disabled={loading || !hasConditions}
-                className="flex-1"
-                size="default"
-              >
-                {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Wand2 className="h-4 w-4" />
-                )}
-                Build Audience
-              </Button>
-              {hasConditions && (
+            {/* ---- Action bar (pinned cleanly at the bottom of the card) ---- */}
+            <div className="border-t border-border bg-card/60 px-5 py-4">
+              <div className="flex items-center gap-2.5">
                 <Button
-                  variant="ghost"
+                  onClick={runSearch}
+                  disabled={loading || !hasConditions}
+                  className="flex-1 font-bold shadow-sm"
                   size="default"
-                  onClick={clearAll}
-                  className="text-muted-foreground"
                 >
-                  <RotateCcw className="h-4 w-4" />
+                  {loading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Wand2 className="h-4 w-4" />
+                  )}
+                  Build Audience
                 </Button>
-              )}
+                {hasConditions && (
+                  <Button
+                    variant="outline"
+                    size="default"
+                    onClick={clearAll}
+                    className="border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                    title="Clear all conditions"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </div>

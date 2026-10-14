@@ -33,8 +33,14 @@ export const buildAudienceFn = createServerFn({ method: "POST" })
         data.orGroups.map((g) => parseIds(g)),
       );
       return { setupRequired: false as const, result };
-    } catch (e) {
+    } catch (e: unknown) {
       if (isSetupRequired(e)) return setupRequiredResponse(e);
-      throw e;
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("Audience build error:", msg, e);
+      return {
+        setupRequired: false as const,
+        error: msg || "Failed to evaluate audience.",
+        result: null,
+      };
     }
   });

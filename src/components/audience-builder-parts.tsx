@@ -52,15 +52,15 @@ export function RuleRow({
 }) {
   const dot = tone === "and" ? "bg-primary" : "bg-accent";
   return (
-    <div className="group flex items-center gap-3 rounded-xl bg-muted/40 px-3 py-2.5 transition-colors hover:bg-muted/70">
-      <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} aria-hidden />
+    <div className="group flex items-center gap-3 rounded-xl border border-border/60 bg-background/80 px-3.5 py-2.5 shadow-xs transition-colors hover:border-border hover:bg-background">
+      <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${dot}`} aria-hidden />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-bold text-foreground">{label}</p>
         <p className="truncate text-xs text-muted-foreground">{description}</p>
       </div>
       <button
         onClick={onRemove}
-        className="shrink-0 rounded-lg p-1.5 text-muted-foreground opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
+        className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100"
         aria-label={`Remove ${label}`}
       >
         <X className="h-4 w-4" />
@@ -87,25 +87,25 @@ export function AddCondition({
 }) {
   return (
     <Select value="" onValueChange={onPick}>
-      <SelectTrigger className="h-9 w-full border-dashed bg-transparent text-sm font-semibold text-muted-foreground hover:bg-muted/40 hover:text-foreground">
+      <SelectTrigger className="h-10 w-full rounded-xl border border-dashed border-border bg-background/50 px-3 text-sm font-semibold text-muted-foreground transition-colors hover:border-primary/60 hover:bg-muted/40 hover:text-foreground">
         <span className="flex items-center gap-2">
-          <Plus className="h-4 w-4" />
+          <Plus className="h-4 w-4 text-primary" />
           <SelectValue placeholder={placeholder} />
         </span>
         <ChevronDown className="h-4 w-4 opacity-60" />
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent className="max-h-80">
         {groups.map(([group, items]) => (
           <div key={group}>
-            <div className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+            <div className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               {group}
             </div>
             {items
               .filter((a) => !exclude.includes(a.id))
               .map((a) => (
                 <SelectItem key={a.id} value={a.id}>
-                  <div className="flex flex-col">
-                    <span className="font-semibold">{a.label}</span>
+                  <div className="flex flex-col py-0.5">
+                    <span className="font-semibold text-foreground">{a.label}</span>
                     <span className="text-[11px] text-muted-foreground">{a.description}</span>
                   </div>
                 </SelectItem>
