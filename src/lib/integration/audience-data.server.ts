@@ -58,7 +58,9 @@ async function fetchAllOrders(mid: string): Promise<OrderRow[]> {
   for (;;) {
     const { data, error } = await sb
       .from("orders")
-      .select("clover_order_id,clover_customer_id,total_cents,net_sales_cents,created_time,payment_status,voided")
+      .select(
+        "clover_order_id,clover_customer_id,total_cents,net_sales_cents,created_time,payment_status,voided",
+      )
       .eq("clover_merchant_id", mid)
       .order("created_time", { ascending: true })
       .range(off, off + PAGE - 1);
@@ -77,7 +79,9 @@ async function fetchAllItems(mid: string): Promise<ItemRow[]> {
   for (;;) {
     const { data, error } = await sb
       .from("order_items")
-      .select("clover_order_id,order_id,item_name,clover_item_id,category,quantity,line_total_cents,created_time")
+      .select(
+        "clover_order_id,order_id,item_name,clover_item_id,category,quantity,line_total_cents,created_time",
+      )
       .eq("clover_merchant_id", mid)
       .order("created_time", { ascending: true })
       .range(off, off + PAGE - 1);
@@ -111,12 +115,8 @@ export async function loadAggregates(): Promise<{
     .eq("clover_merchant_id", mid);
   if (mErr) throw new Error(`Audience: customer_mappings query failed: ${mErr.message}`);
 
-  const custMap = new Map(
-    (custRows ?? []).map((c) => [c.clover_customer_id, c]),
-  );
-  const mapMap = new Map(
-    (mapRows ?? []).map((m) => [m.clover_customer_id, m]),
-  );
+  const custMap = new Map((custRows ?? []).map((c) => [c.clover_customer_id, c]));
+  const mapMap = new Map((mapRows ?? []).map((m) => [m.clover_customer_id, m]));
 
   // Index items by order_id and by clover_order_id.
   const itemsByOrderId = new Map<string, ItemRow[]>();
@@ -188,9 +188,7 @@ export async function loadAggregates(): Promise<{
     agg.visitsByMonth.set(ym, (agg.visitsByMonth.get(ym) ?? 0) + 1);
 
     const oi =
-      itemsByCloverOrderId.get(o.clover_order_id) ??
-      itemsByOrderId.get(o.clover_order_id) ??
-      [];
+      itemsByCloverOrderId.get(o.clover_order_id) ?? itemsByOrderId.get(o.clover_order_id) ?? [];
     for (const it of oi) agg.items.push(it);
 
     const eventDate = matchEventDate(t);

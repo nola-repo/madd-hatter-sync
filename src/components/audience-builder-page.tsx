@@ -3,10 +3,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { Loader2, Plus, X, Download, Users, AlertTriangle, Sparkles } from "lucide-react";
 import { PageHeader, EmptyState } from "@/components/page-header";
@@ -21,7 +30,11 @@ type AudienceMeta = { id: string; label: string; group: string; description: str
 
 function formatDate(ms: number): string {
   if (!ms) return "—";
-  return new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return new Date(ms).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 export function AudienceBuilderPage() {
@@ -40,7 +53,9 @@ export function AudienceBuilderPage() {
   // Load catalog once.
   if (!catalogLoaded) {
     setCatalogLoaded(true);
-    void catalogFn().then((r) => setCatalog(r.audiences as AudienceMeta[])).catch(() => {});
+    void catalogFn()
+      .then((r) => setCatalog(r.audiences as AudienceMeta[]))
+      .catch(() => {});
   }
 
   const runSearch = useCallback(async () => {
@@ -152,16 +167,26 @@ export function AudienceBuilderPage() {
               {andAudiences.map((id) => (
                 <Badge key={id} className="gap-1 bg-primary/10 text-primary hover:bg-primary/15">
                   {labelFor(id)}
-                  <button onClick={() => removeAnd(id)} className="ml-0.5 rounded-full hover:bg-primary/20">
+                  <button
+                    onClick={() => removeAnd(id)}
+                    className="ml-0.5 rounded-full hover:bg-primary/20"
+                  >
                     <X className="h-3 w-3" />
                   </button>
                 </Badge>
               ))}
               {andAudiences.length === 0 && (
-                <span className="text-sm text-muted-foreground">No AND filters — all identified customers included.</span>
+                <span className="text-sm text-muted-foreground">
+                  No AND filters — all identified customers included.
+                </span>
               )}
             </div>
-            <AudienceSelect groups={groups} placeholder="Add AND filter…" onPick={addAnd} exclude={andAudiences} />
+            <AudienceSelect
+              groups={groups}
+              placeholder="Add AND filter…"
+              onPick={addAnd}
+              exclude={andAudiences}
+            />
           </CardContent>
         </Card>
 
@@ -194,13 +219,18 @@ export function AudienceBuilderPage() {
                   {group.map((id) => (
                     <Badge key={id} variant="outline" className="gap-1">
                       {labelFor(id)}
-                      <button onClick={() => removeOrFromGroup(gi, id)} className="ml-0.5 rounded-full hover:bg-muted">
+                      <button
+                        onClick={() => removeOrFromGroup(gi, id)}
+                        className="ml-0.5 rounded-full hover:bg-muted"
+                      >
                         <X className="h-3 w-3" />
                       </button>
                     </Badge>
                   ))}
                   {group.length === 0 && (
-                    <span className="text-sm text-muted-foreground">Empty — add an audience below.</span>
+                    <span className="text-sm text-muted-foreground">
+                      Empty — add an audience below.
+                    </span>
                   )}
                 </div>
                 <div className="mt-2">
@@ -218,7 +248,11 @@ export function AudienceBuilderPage() {
 
         <div className="flex items-center gap-3">
           <Button onClick={runSearch} disabled={loading} size="lg">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
             Build Audience
           </Button>
         </div>
@@ -244,7 +278,11 @@ export function AudienceBuilderPage() {
             {/* Stats */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
               <StatCard label="Unique Customers" value={String(result.totalCustomers)} />
-              <StatCard label="Marketing Eligible" value={String(result.marketingEligible)} tone="success" />
+              <StatCard
+                label="Marketing Eligible"
+                value={String(result.marketingEligible)}
+                tone="success"
+              />
               <StatCard label="With Phone" value={String(result.withPhone)} />
               <StatCard label="With Email" value={String(result.withEmail)} />
               <StatCard label="CRM Linked" value={String(result.crmLinked)} tone="success" />
@@ -272,10 +310,13 @@ export function AudienceBuilderPage() {
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <CardTitle className="text-base">
-                    {result.totalCustomers} customers
-                  </CardTitle>
-                  <Button variant="outline" size="sm" onClick={handleExport} disabled={result.customers.length === 0}>
+                  <CardTitle className="text-base">{result.totalCustomers} customers</CardTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExport}
+                    disabled={result.customers.length === 0}
+                  >
                     <Download className="h-4 w-4" /> Export CSV
                   </Button>
                 </div>
@@ -283,7 +324,10 @@ export function AudienceBuilderPage() {
               <CardContent className="p-0">
                 {result.customers.length === 0 ? (
                   <div className="p-8">
-                    <EmptyState title="No matching customers" description="No identified customers match the selected audience combination." />
+                    <EmptyState
+                      title="No matching customers"
+                      description="No identified customers match the selected audience combination."
+                    />
                   </div>
                 ) : (
                   <ResultsTable customers={result.customers} labelFor={labelFor} />
@@ -305,7 +349,10 @@ export function AudienceBuilderPage() {
 }
 
 function AudienceSelect({
-  groups, placeholder, onPick, exclude,
+  groups,
+  placeholder,
+  onPick,
+  exclude,
 }: {
   groups: [string, AudienceMeta[]][];
   placeholder: string;
@@ -313,7 +360,12 @@ function AudienceSelect({
   exclude: string[];
 }) {
   return (
-    <Select value="" onValueChange={(v) => { onPick(v); }}>
+    <Select
+      value=""
+      onValueChange={(v) => {
+        onPick(v);
+      }}
+    >
       <SelectTrigger className="w-full sm:w-72">
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
@@ -345,7 +397,11 @@ function StatCard({ label, value, tone }: { label: string; value: string; tone?:
           ? "rounded-2xl border border-success/25 p-4"
           : "rounded-2xl border border-border bg-card p-4"
       }
-      style={tone === "success" ? { backgroundColor: "color-mix(in oklab, var(--success) 8%, var(--card))" } : undefined}
+      style={
+        tone === "success"
+          ? { backgroundColor: "color-mix(in oklab, var(--success) 8%, var(--card))" }
+          : undefined
+      }
     >
       <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className="mt-1 text-2xl font-extrabold text-foreground">{value}</div>
@@ -354,12 +410,15 @@ function StatCard({ label, value, tone }: { label: string; value: string; tone?:
 }
 
 function ResultsTable({
-  customers, labelFor,
+  customers,
+  labelFor,
 }: {
   customers: AudienceResult["customers"];
   labelFor: (id: string) => string;
 }) {
-  const { page, setPage, totalPages, pagedRows, total } = usePagination(customers, [customers.length]);
+  const { page, setPage, totalPages, pagedRows, total } = usePagination(customers, [
+    customers.length,
+  ]);
   return (
     <div className="overflow-x-auto">
       <Table>
@@ -381,14 +440,20 @@ function ResultsTable({
               <TableCell className="font-medium text-foreground">{c.fullName}</TableCell>
               <TableCell className="text-sm text-muted-foreground">{c.phone ?? "—"}</TableCell>
               <TableCell className="text-sm text-muted-foreground">{c.email ?? "—"}</TableCell>
-              <TableCell className="text-right font-medium">{money(c.lifetimeSpendCents)}</TableCell>
+              <TableCell className="text-right font-medium">
+                {money(c.lifetimeSpendCents)}
+              </TableCell>
               <TableCell className="text-right">{c.visitCount}</TableCell>
-              <TableCell className="text-sm text-muted-foreground">{formatDate(c.lastVisitMs)}</TableCell>
+              <TableCell className="text-sm text-muted-foreground">
+                {formatDate(c.lastVisitMs)}
+              </TableCell>
               <TableCell>
                 {c.ghlContactId ? (
                   <Badge className="bg-success/15 text-success hover:bg-success/20">Linked</Badge>
                 ) : (
-                  <Badge variant="outline" className="text-muted-foreground">—</Badge>
+                  <Badge variant="outline" className="text-muted-foreground">
+                    —
+                  </Badge>
                 )}
               </TableCell>
               <TableCell>

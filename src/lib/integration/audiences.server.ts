@@ -1,10 +1,18 @@
 // Server-only: audience predicate evaluation + public segment builder API.
 import {
-  AUDIENCES, UFC_DATES, HALLOWEEN_DATES, THANKSGIVING_EVE_DATES,
-  THANKSGIVING_DAY_DATES, type AudienceId, type BirthdayMonth,
+  AUDIENCES,
+  UFC_DATES,
+  HALLOWEEN_DATES,
+  THANKSGIVING_EVE_DATES,
+  THANKSGIVING_DAY_DATES,
+  type AudienceId,
+  type BirthdayMonth,
 } from "./audience-defs";
 import {
-  loadAllData, aggregateByCustomer, type LoadedData, type CustomerAgg,
+  loadAllData,
+  aggregateByCustomer,
+  type LoadedData,
+  type CustomerAgg,
   type EnrichedOrder,
 } from "./audience-data.server";
 
@@ -87,18 +95,39 @@ function markEventNights(agg: CustomerAgg): void {
 export function qualifies(agg: CustomerAgg, id: AudienceId): boolean {
   const now = Date.now();
   switch (id) {
-    case "wings": return agg.items.some((it) => itemMatches(it.itemName, ["wing"]));
-    case "tacos": return agg.items.some((it) => itemMatches(it.itemName, ["taco"]));
-    case "fishbowl": return agg.items.some((it) => itemMatches(it.itemName, ["fishbowl", "fish bowl"]));
+    case "wings":
+      return agg.items.some((it) => itemMatches(it.itemName, ["wing"]));
+    case "tacos":
+      return agg.items.some((it) => itemMatches(it.itemName, ["taco"]));
+    case "fishbowl":
+      return agg.items.some((it) => itemMatches(it.itemName, ["fishbowl", "fish bowl"]));
     case "bottle_service":
-      return agg.items.some((it) =>
-        itemMatches(it.itemName, ["bottle service", "bottle svc", "btl ", "bottle"]) ||
-        itemMatches(it.itemName, ["hennessy", "patron", "don julio", "tequila", "vodka", "whiskey", "whisky", "champagne", "moet", "ciroc"]));
+      return agg.items.some(
+        (it) =>
+          itemMatches(it.itemName, ["bottle service", "bottle svc", "btl ", "bottle"]) ||
+          itemMatches(it.itemName, [
+            "hennessy",
+            "patron",
+            "don julio",
+            "tequila",
+            "vodka",
+            "whiskey",
+            "whisky",
+            "champagne",
+            "moet",
+            "ciroc",
+          ]),
+      );
     case "weekend_brunch":
-      return agg.items.some((it) =>
-        itemMatches(it.itemName, ["brunch"]) &&
-        agg.orders.some((o) => o.orderId === it.orderId && (o.localDay === 0 || o.localDay === 6)));
-    case "all_food": return agg.items.length > 0;
+      return agg.items.some(
+        (it) =>
+          itemMatches(it.itemName, ["brunch"]) &&
+          agg.orders.some(
+            (o) => o.orderId === it.orderId && (o.localDay === 0 || o.localDay === 6),
+          ),
+      );
+    case "all_food":
+      return agg.items.length > 0;
     case "sunday_football":
       return agg.orders.some((o) => o.localDay === 0 && inSeasonalWindow(o.localMonth));
     case "tuesday_visitors":
@@ -106,41 +135,66 @@ export function qualifies(agg: CustomerAgg, id: AudienceId): boolean {
     case "wednesday_karaoke":
       return agg.orders.some((o) => o.localDay === 3 && inOvernightWindow(o.localHour, 21, 5));
     case "weekday_daytime":
-      return agg.orders.some((o) => o.localDay >= 1 && o.localDay <= 5 && o.localHour >= 11 && o.localHour < 20);
+      return agg.orders.some(
+        (o) => o.localDay >= 1 && o.localDay <= 5 && o.localHour >= 11 && o.localHour < 20,
+      );
     case "thursday_nightlife":
       return agg.orders.some((o) => o.localDay === 4 && inOvernightWindow(o.localHour, 19, 8));
     case "friday_nightlife":
       return agg.orders.some((o) => o.localDay === 5 && inOvernightWindow(o.localHour, 19, 8));
     case "saturday_nightlife":
       return agg.orders.some((o) => o.localDay === 6 && inOvernightWindow(o.localHour, 19, 8));
-    case "single_250": return agg.orders.some((o) => (o.totalCents || 0) > 25000);
-    case "single_500": return agg.orders.some((o) => (o.totalCents || 0) > 50000);
-    case "single_750": return agg.orders.some((o) => (o.totalCents || 0) > 75000);
-    case "single_1000": return agg.orders.some((o) => (o.totalCents || 0) > 100000);
-    case "visits_2_per_month": return hasVisitsPerMonth(agg, 2);
-    case "visits_4_per_month": return hasVisitsPerMonth(agg, 4);
-    case "inactive_30": return agg.lastVisitMs > 0 && now - agg.lastVisitMs > 30 * 86400000;
-    case "inactive_60": return agg.lastVisitMs > 0 && now - agg.lastVisitMs > 60 * 86400000;
-    case "inactive_90": return agg.lastVisitMs > 0 && now - agg.lastVisitMs > 90 * 86400000;
-    case "lifetime_2500": return agg.lifetimeSpendCents > 250000;
-    case "lifetime_5000": return agg.lifetimeSpendCents > 500000;
-    case "multi_day_visitors": return agg.visitDows.size > 1;
+    case "single_250":
+      return agg.orders.some((o) => (o.totalCents || 0) > 25000);
+    case "single_500":
+      return agg.orders.some((o) => (o.totalCents || 0) > 50000);
+    case "single_750":
+      return agg.orders.some((o) => (o.totalCents || 0) > 75000);
+    case "single_1000":
+      return agg.orders.some((o) => (o.totalCents || 0) > 100000);
+    case "visits_2_per_month":
+      return hasVisitsPerMonth(agg, 2);
+    case "visits_4_per_month":
+      return hasVisitsPerMonth(agg, 4);
+    case "inactive_30":
+      return agg.lastVisitMs > 0 && now - agg.lastVisitMs > 30 * 86400000;
+    case "inactive_60":
+      return agg.lastVisitMs > 0 && now - agg.lastVisitMs > 60 * 86400000;
+    case "inactive_90":
+      return agg.lastVisitMs > 0 && now - agg.lastVisitMs > 90 * 86400000;
+    case "lifetime_2500":
+      return agg.lifetimeSpendCents > 250000;
+    case "lifetime_5000":
+      return agg.lifetimeSpendCents > 500000;
+    case "multi_day_visitors":
+      return agg.visitDows.size > 1;
     case "weekday_100":
-      return agg.orders.some((o) => o.localDay >= 1 && o.localDay <= 5 && (o.totalCents || 0) > 10000);
+      return agg.orders.some(
+        (o) => o.localDay >= 1 && o.localDay <= 5 && (o.totalCents || 0) > 10000,
+      );
     case "weekend_500":
-      return agg.orders.some((o) => (o.localDay === 0 || o.localDay === 6) && (o.totalCents || 0) > 50000);
-    case "first_time": return agg.totalVisits > 0 && now - agg.firstVisitMs <= 30 * 86400000;
-    case "ufc": return agg.orders.some((o) => UFC_DATES.includes(o.localDateStr));
-    case "halloween": return agg.orders.some((o) => HALLOWEEN_DATES.includes(o.localDateStr));
-    case "thanksgiving_eve": return agg.orders.some((o) => THANKSGIVING_EVE_DATES.includes(o.localDateStr));
-    case "thanksgiving_day": return agg.orders.some((o) => THANKSGIVING_DAY_DATES.includes(o.localDateStr));
+      return agg.orders.some(
+        (o) => (o.localDay === 0 || o.localDay === 6) && (o.totalCents || 0) > 50000,
+      );
+    case "first_time":
+      return agg.totalVisits > 0 && now - agg.firstVisitMs <= 30 * 86400000;
+    case "ufc":
+      return agg.orders.some((o) => UFC_DATES.includes(o.localDateStr));
+    case "halloween":
+      return agg.orders.some((o) => HALLOWEEN_DATES.includes(o.localDateStr));
+    case "thanksgiving_eve":
+      return agg.orders.some((o) => THANKSGIVING_EVE_DATES.includes(o.localDateStr));
+    case "thanksgiving_day":
+      return agg.orders.some((o) => THANKSGIVING_DAY_DATES.includes(o.localDateStr));
     case "repeat_special_event": {
       markEventNights(agg);
       const distinct = new Set(Array.from(agg.eventNights).map((e) => e.split(":")[0]));
       return distinct.size >= 2;
     }
-    case "birthday": return false; // birthday field not in schema
-    default: return false;
+    case "birthday":
+      return false; // birthday field not in schema
+    default:
+      return false;
   }
 }
 
@@ -149,36 +203,53 @@ function buildCustomerRow(cid: string, agg: CustomerAgg, data: LoadedData): Audi
   const mapping = data.mappings.get(cid);
   markEventNights(agg);
   const favoriteItems = Array.from(agg.favoriteItems.entries())
-    .sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name]) => name);
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([name]) => name);
   return {
     cloverCustomerId: cid,
     customerName: [cust?.firstName, cust?.lastName].filter(Boolean).join(" ") || "Clover Customer",
-    firstName: cust?.firstName ?? null, lastName: cust?.lastName ?? null,
-    phone: cust?.phone ?? null, email: cust?.email ?? null,
+    firstName: cust?.firstName ?? null,
+    lastName: cust?.lastName ?? null,
+    phone: cust?.phone ?? null,
+    email: cust?.email ?? null,
     marketingAllowed: cust?.marketingAllowed ?? null,
     ghlContactId: mapping?.ghlContactId ?? null,
-    matchStatus: mapping?.matchStatus ?? (cust?.phone || cust?.email ? "NO_GHL_MATCH" : "NO_IDENTIFIERS"),
+    matchStatus:
+      mapping?.matchStatus ?? (cust?.phone || cust?.email ? "NO_GHL_MATCH" : "NO_IDENTIFIERS"),
     firstVisitMs: agg.firstVisitMs === Infinity ? 0 : agg.firstVisitMs,
-    lastVisitMs: agg.lastVisitMs, totalVisits: agg.totalVisits,
+    lastVisitMs: agg.lastVisitMs,
+    totalVisits: agg.totalVisits,
     lifetimeSpendCents: agg.lifetimeSpendCents,
-    qualifyingVisits: agg.totalVisits, qualifyingSpendCents: agg.lifetimeSpendCents,
-    favoriteItems, eventNightsAttended: Array.from(agg.eventNights),
+    qualifyingVisits: agg.totalVisits,
+    qualifyingSpendCents: agg.lifetimeSpendCents,
+    favoriteItems,
+    eventNightsAttended: Array.from(agg.eventNights),
     birthdayMonth: cust?.birthdayMonth ?? null,
   };
 }
 
-function finalize(customers: AudienceCustomer[], totalTx: number, qualRevenue: number): SegmentResult {
+function finalize(
+  customers: AudienceCustomer[],
+  totalTx: number,
+  qualRevenue: number,
+): SegmentResult {
   const withPhone = customers.filter((c) => c.phone).length;
   const withEmail = customers.filter((c) => c.email).length;
   const mktEligible = customers.filter(
-    (c) => Boolean(c.phone || c.email) && (c.marketingAllowed === true || c.marketingAllowed === null),
+    (c) =>
+      Boolean(c.phone || c.email) && (c.marketingAllowed === true || c.marketingAllowed === null),
   ).length;
   const unlinked = customers.filter((c) => !c.ghlContactId).length;
   const paidTx = customers.reduce((s, c) => s + c.totalVisits, 0);
   return {
-    customers, totalTransactions: totalTx, uniqueCustomers: customers.length,
-    customersWithPhone: withPhone, customersWithEmail: withEmail,
-    marketingEligible: mktEligible, unlinked,
+    customers,
+    totalTransactions: totalTx,
+    uniqueCustomers: customers.length,
+    customersWithPhone: withPhone,
+    customersWithEmail: withEmail,
+    marketingEligible: mktEligible,
+    unlinked,
     qualifyingRevenueCents: qualRevenue,
     averageCheckCents: paidTx > 0 ? Math.round(qualRevenue / paidTx) : 0,
   };
@@ -230,7 +301,8 @@ export async function buildSegment(query: SegmentQuery): Promise<SegmentResult> 
 
   if (query.marketingEligibleOnly) {
     const filtered = customers.filter(
-      (c) => Boolean(c.phone || c.email) && (c.marketingAllowed === true || c.marketingAllowed === null),
+      (c) =>
+        Boolean(c.phone || c.email) && (c.marketingAllowed === true || c.marketingAllowed === null),
     );
     return finalize(filtered, totalTx, qualRevenue);
   }
@@ -239,7 +311,9 @@ export async function buildSegment(query: SegmentQuery): Promise<SegmentResult> 
   return finalize(customers, totalTx, qualRevenue);
 }
 
-export async function getAudienceCounts(): Promise<Array<{ id: AudienceId; label: string; group: string; count: number }>> {
+export async function getAudienceCounts(): Promise<
+  Array<{ id: AudienceId; label: string; group: string; count: number }>
+> {
   const data = await loadAllData();
   const byCustomer = aggregateByCustomer(data);
   const out: Array<{ id: AudienceId; label: string; group: string; count: number }> = [];

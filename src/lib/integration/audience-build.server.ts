@@ -32,9 +32,16 @@ export type AudienceResult = {
 };
 
 const BIRTHDAY_IDS: AudienceId[] = [
-  "birthday_oct", "birthday_nov", "birthday_dec", "birthday_jan",
-  "birthday_feb", "birthday_mar", "birthday_apr", "birthday_may",
-  "birthday_jun", "birthday_jul",
+  "birthday_oct",
+  "birthday_nov",
+  "birthday_dec",
+  "birthday_jan",
+  "birthday_feb",
+  "birthday_mar",
+  "birthday_apr",
+  "birthday_may",
+  "birthday_jun",
+  "birthday_jul",
 ];
 
 /**
@@ -85,13 +92,15 @@ export async function buildAudience(
 
   const byId = new Map(allCustomers.map((c) => [c.cloverCustomerId, c]));
   const customers: AudienceResultCustomer[] = [];
-  let marketingEligible = 0, withPhone = 0, withEmail = 0, crmLinked = 0;
+  let marketingEligible = 0,
+    withPhone = 0,
+    withEmail = 0,
+    crmLinked = 0;
 
   for (const cid of result) {
     const c: CustomerAgg | undefined = byId.get(cid);
     if (!c) continue;
-    const fullName =
-      [c.firstName, c.lastName].filter(Boolean).join(" ") || "Clover Customer";
+    const fullName = [c.firstName, c.lastName].filter(Boolean).join(" ") || "Clover Customer";
     if (c.phone) withPhone++;
     if (c.email) withEmail++;
     if (c.ghlContactId) crmLinked++;

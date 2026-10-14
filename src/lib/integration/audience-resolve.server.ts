@@ -3,23 +3,30 @@
 import type { AudienceId } from "./audience-types.server";
 import {
   matchesProduct,
-  WINGS_KEYWORDS, TACO_KEYWORDS, BRUNCH_KEYWORDS,
-  FISHBOWL_KEYWORDS, BOTTLE_KEYWORDS,
+  WINGS_KEYWORDS,
+  TACO_KEYWORDS,
+  BRUNCH_KEYWORDS,
+  FISHBOWL_KEYWORDS,
+  BOTTLE_KEYWORDS,
 } from "./audience-types.server";
 import type { CustomerAgg } from "./audience-data.server";
 import { wallParts } from "./audience-dates.server";
 import {
-  isDow, inDateRange, inOvernightWindow, inHourRange, isDate,
-  inEventWindow, UFC_EVENT_DATES, HALLOWEEN_DATES,
-  THANKSGIVING_EVE_DATES, THANKSGIVING_DAY_DATES,
+  isDow,
+  inDateRange,
+  inOvernightWindow,
+  inHourRange,
+  isDate,
+  inEventWindow,
+  UFC_EVENT_DATES,
+  HALLOWEEN_DATES,
+  THANKSGIVING_EVE_DATES,
+  THANKSGIVING_DAY_DATES,
   SUNDAY_FOOTBALL_WINDOWS,
 } from "./audience-dates.server";
 
 /** Resolve a single audience to a Set of customer IDs. */
-export function resolveAudience(
-  id: AudienceId,
-  customers: CustomerAgg[],
-): Set<string> {
+export function resolveAudience(id: AudienceId, customers: CustomerAgg[]): Set<string> {
   const result = new Set<string>();
   const now = Date.now();
 
@@ -136,14 +143,10 @@ export function resolveAudience(
 
       // ---- Events / holidays (29-33) ----
       case "ufc_fight_night":
-        match = c.orders.some((o) =>
-          UFC_EVENT_DATES.some((d) => inEventWindow(o.created_time, d)),
-        );
+        match = c.orders.some((o) => UFC_EVENT_DATES.some((d) => inEventWindow(o.created_time, d)));
         break;
       case "halloween":
-        match = c.orders.some((o) =>
-          HALLOWEEN_DATES.some((d) => inEventWindow(o.created_time, d)),
-        );
+        match = c.orders.some((o) => HALLOWEEN_DATES.some((d) => inEventWindow(o.created_time, d)));
         break;
       case "thanksgiving_eve":
         match = c.orders.some((o) =>
@@ -151,9 +154,7 @@ export function resolveAudience(
         );
         break;
       case "thanksgiving_day":
-        match = c.orders.some((o) =>
-          THANKSGIVING_DAY_DATES.some((d) => isDate(o.created_time, d)),
-        );
+        match = c.orders.some((o) => THANKSGIVING_DAY_DATES.some((d) => isDate(o.created_time, d)));
         break;
       case "repeat_special_event":
         match = c.eventNights.size >= 2;
