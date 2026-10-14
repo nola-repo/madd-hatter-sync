@@ -214,33 +214,40 @@ export function AudienceBuilderPage() {
         </Badge>
       </div>
 
-      {/* ---- Split-screen workspace ---- */}
-      <div className="grid min-h-[calc(100vh-9rem)] grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(320px,0.85fr)_minmax(0,2.15fr)]">
-        {/* ============ LEFT: Rule builder (sticky card) ============ */}
-        <div className="w-full lg:sticky lg:top-4">
-          <div className="flex flex-col rounded-2xl border border-border bg-card shadow-sm">
-            <div className="flex items-center gap-2 border-b border-border px-5 py-4">
-              <Filter className="h-4 w-4 text-primary" />
-              <span className="text-sm font-bold text-foreground">Conditions</span>
+      {/* ---- Split-screen workspace (occupies available viewport height) ---- */}
+      <div className="grid min-h-[calc(100vh-13rem)] grid-cols-1 items-stretch gap-5 lg:grid-cols-[minmax(340px,0.9fr)_minmax(0,2.1fr)]">
+        {/* ============ LEFT: Rule builder (stretches to fill vertical height) ============ */}
+        <div className="flex w-full flex-col">
+          <div className="flex h-full flex-1 flex-col rounded-2xl border border-border bg-card shadow-sm">
+            <div className="flex items-center gap-2.5 border-b border-border bg-muted/20 px-5 py-4">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <Filter className="h-4 w-4" />
+              </span>
+              <div className="flex flex-col">
+                <span className="text-sm font-bold text-foreground">Audience Conditions</span>
+                <span className="text-[11px] text-muted-foreground">Select criteria to match</span>
+              </div>
               {activeConditionCount > 0 && (
-                <Badge className="ml-auto h-5 px-2 text-[11px] font-semibold">
-                  {activeConditionCount}
+                <Badge className="ml-auto h-5.5 px-2.5 text-[11px] font-bold">
+                  {activeConditionCount} {activeConditionCount === 1 ? "rule" : "rules"}
                 </Badge>
               )}
             </div>
 
-            <div className="space-y-6 p-5">
+            <div className="flex-1 space-y-6 overflow-y-auto p-5">
               {/* ---- Match ALL (AND) ---- */}
-              <div>
-                <div className="mb-2.5 flex items-baseline gap-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-primary">
-                    Match all
-                  </span>
-                  <span className="text-[11px] text-muted-foreground">
-                    · every condition required
-                  </span>
+              <div className="rounded-xl border border-border/60 bg-muted/15 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wider text-primary">
+                      Match all
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      · Every condition required
+                    </span>
+                  </div>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   {andAudiences.map((id) => (
                     <RuleRow
                       key={id}
@@ -251,9 +258,9 @@ export function AudienceBuilderPage() {
                     />
                   ))}
                   {andAudiences.length === 0 && (
-                    <div className="rounded-xl border border-dashed border-border/80 bg-muted/20 px-3 py-2.5 text-center">
-                      <p className="text-xs text-muted-foreground">
-                        No required conditions — all customers included.
+                    <div className="rounded-xl border border-dashed border-border/80 bg-background/50 px-3.5 py-3 text-center">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        No required conditions — all customers match.
                       </p>
                     </div>
                   )}
@@ -267,31 +274,38 @@ export function AudienceBuilderPage() {
               </div>
 
               {/* ---- Match ANY (OR groups) ---- */}
-              <div>
-                <div className="mb-2.5 flex items-center justify-between">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-accent-foreground">
+              <div className="rounded-xl border border-border/60 bg-muted/15 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center rounded-md bg-accent/20 px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wider text-accent-foreground">
                       Match any
                     </span>
-                    <span className="text-[11px] text-muted-foreground">· groups intersected</span>
+                    <span className="text-xs text-muted-foreground">· OR groups</span>
                   </div>
-                  <button
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
                     onClick={addOrGroup}
-                    className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold text-primary transition-colors hover:bg-primary/10"
+                    className="h-7 gap-1 rounded-lg px-2 text-xs font-bold text-primary hover:bg-primary/10 hover:text-primary"
                   >
-                    <Plus className="h-3.5 w-3.5" /> Group
-                  </button>
+                    <Plus className="h-3.5 w-3.5" /> Add Group
+                  </Button>
                 </div>
 
                 <div className="space-y-3">
                   {orGroups.map((group, gi) => (
-                    <div key={gi} className="rounded-xl border border-border bg-muted/20 p-3.5">
+                    <div
+                      key={gi}
+                      className="rounded-xl border border-border/80 bg-background/90 p-3.5 shadow-2xs"
+                    >
                       <div className="mb-2.5 flex items-center justify-between">
                         <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                           <Layers className="h-3.5 w-3.5 text-primary" /> Group {gi + 1}
                         </span>
                         {orGroups.length > 1 && (
                           <button
+                            type="button"
                             onClick={() => removeOrGroup(gi)}
                             className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                             aria-label="Remove group"
@@ -311,9 +325,9 @@ export function AudienceBuilderPage() {
                           />
                         ))}
                         {group.length === 0 && (
-                          <div className="rounded-lg border border-dashed border-border/80 bg-background/50 px-2.5 py-2 text-center">
-                            <p className="text-[11px] text-muted-foreground">
-                              Empty — add a condition below.
+                          <div className="rounded-lg border border-dashed border-border/80 bg-muted/30 px-3 py-2.5 text-center">
+                            <p className="text-xs text-muted-foreground">
+                              Empty group — pick a condition below.
                             </p>
                           </div>
                         )}
@@ -330,19 +344,19 @@ export function AudienceBuilderPage() {
               </div>
             </div>
 
-            {/* ---- Action bar (pinned cleanly at the bottom of the card) ---- */}
-            <div className="border-t border-border bg-card/60 px-5 py-4">
+            {/* ---- Action bar (pinned cleanly at the bottom, fills bottom space) ---- */}
+            <div className="mt-auto border-t border-border bg-muted/20 px-5 py-4">
               <div className="flex items-center gap-2.5">
                 <Button
                   onClick={runSearch}
                   disabled={loading || !hasConditions}
-                  className="flex-1 font-bold shadow-sm"
+                  className="h-11 flex-1 gap-2 rounded-xl text-sm font-bold shadow-sm transition-all hover:shadow active:scale-[0.99]"
                   size="default"
                 >
                   {loading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="h-4.5 w-4.5 animate-spin" />
                   ) : (
-                    <Wand2 className="h-4 w-4" />
+                    <Wand2 className="h-4.5 w-4.5" />
                   )}
                   Build Audience
                 </Button>
@@ -351,7 +365,7 @@ export function AudienceBuilderPage() {
                     variant="outline"
                     size="default"
                     onClick={clearAll}
-                    className="border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                    className="h-11 rounded-xl border-border px-3 text-muted-foreground hover:bg-muted hover:text-foreground active:scale-[0.99]"
                     title="Clear all conditions"
                   >
                     <RotateCcw className="h-4 w-4" />
