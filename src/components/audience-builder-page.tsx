@@ -185,7 +185,7 @@ export function AudienceBuilderPage() {
     andAudiences.length + orGroups.filter((g) => g.length > 0).reduce((n, g) => n + g.length, 0);
 
   return (
-    <div className="mx-auto w-full max-w-[1500px]">
+    <div className="mx-auto w-full max-w-[1700px]">
       {/* ---- Compact header ---- */}
       <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -209,7 +209,7 @@ export function AudienceBuilderPage() {
       </div>
 
       {/* ---- Split-screen workspace ---- */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[400px_1fr]">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(300px,0.85fr)_minmax(0,2.15fr)]">
         {/* ============ LEFT: Rule builder (sticky) ============ */}
         <div className="lg:sticky lg:top-4 lg:self-start">
           <div className="rounded-2xl border border-border bg-card shadow-sm">

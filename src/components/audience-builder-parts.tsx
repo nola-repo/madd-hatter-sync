@@ -142,7 +142,7 @@ export function KpiStrip({
     { label: "CRM Linked", value: crm, tone: "success" as const },
   ];
   return (
-    <div className="grid grid-cols-2 divide-x divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card shadow-sm sm:grid-cols-3 sm:divide-y-0 lg:grid-cols-5">
+    <div className="grid grid-cols-2 divide-x divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card shadow-sm sm:grid-cols-3 sm:divide-y-0 xl:grid-cols-5">
       {items.map((it) => (
         <div
           key={it.label}
