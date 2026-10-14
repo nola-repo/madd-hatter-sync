@@ -185,7 +185,7 @@ export function AudienceBuilderPage() {
     andAudiences.length + orGroups.filter((g) => g.length > 0).reduce((n, g) => n + g.length, 0);
 
   return (
-    <div className="mx-auto w-full max-w-[1700px]">
+    <div className="mx-auto w-full">
       {/* ---- Compact header ---- */}
       <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -209,10 +209,10 @@ export function AudienceBuilderPage() {
       </div>
 
       {/* ---- Split-screen workspace ---- */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(300px,0.85fr)_minmax(0,2.15fr)]">
+      <div className="grid min-h-[calc(100vh-9rem)] grid-cols-1 gap-5 lg:grid-cols-[minmax(300px,0.8fr)_minmax(0,2.2fr)]">
         {/* ============ LEFT: Rule builder (sticky) ============ */}
         <div className="lg:sticky lg:top-4 lg:self-start">
-          <div className="rounded-2xl border border-border bg-card shadow-sm">
+          <div className="flex h-full flex-col rounded-2xl border border-border bg-card shadow-sm">
             <div className="flex items-center gap-2 border-b border-border px-5 py-3.5">
               <Filter className="h-4 w-4 text-primary" />
               <span className="text-sm font-bold text-foreground">Conditions</span>
@@ -221,7 +221,7 @@ export function AudienceBuilderPage() {
               )}
             </div>
 
-            <div className="space-y-5 p-5">
+            <div className="flex-1 space-y-5 overflow-y-auto p-5">
               {/* ---- Match ALL (AND) ---- */}
               <div>
                 <div className="mb-2.5 flex items-center gap-2">
@@ -317,7 +317,7 @@ export function AudienceBuilderPage() {
             </div>
 
             {/* ---- Action bar (inside the rule panel) ---- */}
-            <div className="flex items-center gap-2.5 border-t border-border px-5 py-3.5">
+            <div className="mt-auto flex items-center gap-2.5 border-t border-border px-5 py-3.5">
               <Button
                 onClick={runSearch}
                 disabled={loading || !hasConditions}
@@ -346,7 +346,7 @@ export function AudienceBuilderPage() {
         </div>
 
         {/* ============ RIGHT: Results dashboard ============ */}
-        <div className="min-w-0 space-y-4">
+        <div className="flex min-w-0 flex-col gap-4">
           {/* ---- Error ---- */}
           {error && (
             <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
@@ -375,7 +375,7 @@ export function AudienceBuilderPage() {
 
           {/* ---- Loading skeleton ---- */}
           {loading && (
-            <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-border bg-card py-20 shadow-sm">
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-2xl border border-border bg-card py-20 shadow-sm">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
               <p className="text-sm text-muted-foreground">
                 Evaluating audiences against purchase history…
@@ -407,7 +407,7 @@ export function AudienceBuilderPage() {
               )}
 
               {/* Results table panel */}
-              <div className="rounded-2xl border border-border bg-card shadow-sm">
+              <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-border bg-card shadow-sm">
                 <div className="flex flex-col gap-2 border-b border-border px-5 py-3.5 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-2">
                     <Users className="h-4 w-4 text-primary" />
@@ -425,7 +425,7 @@ export function AudienceBuilderPage() {
                   </Button>
                 </div>
                 {result.customers.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+                  <div className="flex flex-1 flex-col items-center justify-center px-6 py-16 text-center">
                     <p className="text-sm font-bold text-foreground">No matching customers</p>
                     <p className="mt-1 max-w-sm text-sm text-muted-foreground">
                       No identified customers match this combination. Try widening your conditions.
@@ -440,7 +440,7 @@ export function AudienceBuilderPage() {
 
           {/* ---- Initial empty state ---- */}
           {!result && !error && !loading && !searched && (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/40 px-6 py-20 text-center">
+            <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/40 px-6 py-20 text-center">
               <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                 <Target className="h-7 w-7" />
               </span>
@@ -454,7 +454,7 @@ export function AudienceBuilderPage() {
 
           {/* ---- Zero-result state (searched but empty) ---- */}
           {result && result.customers.length === 0 && !loading && (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/40 px-6 py-16 text-center">
+            <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/40 px-6 py-16 text-center">
               <p className="text-sm font-bold text-foreground">No matching customers found</p>
               <p className="mt-1 max-w-sm text-sm text-muted-foreground">
                 Try removing a condition or switching AND to OR.
