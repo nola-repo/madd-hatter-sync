@@ -17,7 +17,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Loader2, Plus, X, Download, Users, AlertTriangle, Sparkles } from "lucide-react";
+import {
+  Loader2,
+  Plus,
+  X,
+  Download,
+  Users,
+  AlertTriangle,
+  Sparkles,
+  Filter,
+  Phone,
+  Mail,
+  Link2,
+  CheckCircle2,
+  CalendarClock,
+} from "lucide-react";
 import { PageHeader, EmptyState } from "@/components/page-header";
 import { usePagination, Pager } from "@/components/purchase-mapping/pagination";
 import { useServerFn } from "@tanstack/react-start";
@@ -95,6 +109,10 @@ export function AudienceBuilderPage() {
   }, [catalog]);
 
   const labelFor = (id: string) => catalog.find((a) => a.id === id)?.label ?? id;
+  const descFor = (id: string) => catalog.find((a) => a.id === id)?.description ?? "";
+
+  const hasConditions = andAudiences.length > 0 || orGroups.some((g) => g.length > 0);
+  const totalAudiences = catalog.length;
 
   // ---- AND filter management ----
   const addAnd = (id: string) => {
@@ -115,6 +133,14 @@ export function AudienceBuilderPage() {
   };
   const addOrGroup = () => setOrGroups([...orGroups, []]);
   const removeOrGroup = (gi: number) => setOrGroups(orGroups.filter((_, i) => i !== gi));
+
+  const clearAll = () => {
+    setAndAudiences([]);
+    setOrGroups([[]]);
+    setResult(null);
+    setSearched(false);
+    setError(null);
+  };
 
   const handleExport = () => {
     if (!result || result.customers.length === 0) return;
@@ -156,104 +182,142 @@ export function AudienceBuilderPage() {
     <div>
       <PageHeader
         title="Audience Builder"
-        description="Combine the 34 CRM master-plan audiences with AND/OR logic. Export deduplicated customer lists for outreach."
+        description="Combine customer purchase, visit, spending, event, and birthday criteria into deduplicated outreach lists."
+        actions={
+          <Badge variant="outline" className="gap-1.5 px-3 py-1.5 text-xs">
+            <Sparkles className="h-3.5 w-3.5 text-primary" />
+            {totalAudiences} audiences available
+          </Badge>
+        }
       />
 
       <div className="space-y-5">
-        {/* AND filters */}
+        {/* ---- Unified rules builder ---- */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
-              <Sparkles className="h-4 w-4 text-primary" /> Must match ALL of (AND)
+              <Filter className="h-4 w-4 text-primary" /> Audience Conditions
             </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Build your audience by combining conditions. <strong>AND</strong> requires every
+              condition to match (intersection). <strong>OR</strong> groups match any condition
+              inside the group (union), and separate OR groups are combined with AND.
+            </p>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-wrap gap-2">
-              {andAudiences.map((id) => (
-                <Badge key={id} className="gap-1 bg-primary/10 text-primary hover:bg-primary/15">
-                  {labelFor(id)}
-                  <button
-                    onClick={() => removeAnd(id)}
-                    className="ml-0.5 rounded-full hover:bg-primary/20"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
-              {andAudiences.length === 0 && (
-                <span className="text-sm text-muted-foreground">
-                  No AND filters — all identified customers included.
+          <CardContent className="space-y-5">
+            {/* AND section */}
+            <div>
+              <div className="mb-2 flex items-center gap-2">
+                <span className="inline-flex items-center rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-primary">
+                  Match ALL
                 </span>
-              )}
-            </div>
-            <AudienceSelect
-              groups={groups}
-              placeholder="Add AND filter…"
-              onPick={addAnd}
-              exclude={andAudiences}
-            />
-          </CardContent>
-        </Card>
-
-        {/* OR groups */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Users className="h-4 w-4 text-primary" /> Must match ANY of (OR groups)
-              </CardTitle>
-              <Button variant="outline" size="sm" onClick={addOrGroup}>
-                <Plus className="h-4 w-4" /> Add OR group
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {orGroups.map((group, gi) => (
-              <div key={gi} className="rounded-2xl border border-border bg-muted/30 p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                    OR group {gi + 1}
-                  </span>
-                  {orGroups.length > 1 && (
-                    <Button variant="ghost" size="sm" onClick={() => removeOrGroup(gi)}>
-                      <X className="h-3 w-3" /> Remove group
-                    </Button>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {group.map((id) => (
-                    <Badge key={id} variant="outline" className="gap-1">
-                      {labelFor(id)}
-                      <button
-                        onClick={() => removeOrFromGroup(gi, id)}
-                        className="ml-0.5 rounded-full hover:bg-muted"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                  {group.length === 0 && (
-                    <span className="text-sm text-muted-foreground">
-                      Empty — add an audience below.
-                    </span>
-                  )}
-                </div>
-                <div className="mt-2">
-                  <AudienceSelect
-                    groups={groups}
-                    placeholder="Add to this OR group…"
-                    onPick={(id) => addOrToGroup(gi, id)}
-                    exclude={group}
-                  />
-                </div>
+                <span className="text-xs text-muted-foreground">
+                  Customer must satisfy every condition below
+                </span>
               </div>
-            ))}
+              <div className="space-y-2">
+                {andAudiences.map((id) => (
+                  <RuleRow
+                    key={id}
+                    label={labelFor(id)}
+                    description={descFor(id)}
+                    onRemove={() => removeAnd(id)}
+                  />
+                ))}
+                {andAudiences.length === 0 && (
+                  <p className="text-sm text-muted-foreground italic">
+                    No AND conditions — all identified customers are included by default.
+                  </p>
+                )}
+              </div>
+              <div className="mt-2">
+                <AudienceSelect
+                  groups={groups}
+                  placeholder="Add a condition that must match…"
+                  onPick={addAnd}
+                  exclude={andAudiences}
+                />
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div className="flex items-center gap-3">
+              <div className="h-px flex-1 bg-border" />
+              <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                and / or
+              </span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+
+            {/* OR section */}
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center rounded-lg bg-accent/15 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-accent-foreground">
+                    Match ANY
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Customer must match at least one condition per group
+                  </span>
+                </div>
+                <Button variant="outline" size="sm" onClick={addOrGroup}>
+                  <Plus className="h-3.5 w-3.5" /> Add OR group
+                </Button>
+              </div>
+
+              <div className="space-y-3">
+                {orGroups.map((group, gi) => (
+                  <div key={gi} className="rounded-2xl border border-border bg-muted/20 p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                        OR group {gi + 1}
+                      </span>
+                      {orGroups.length > 1 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => removeOrGroup(gi)}
+                        >
+                          <X className="h-3 w-3" /> Remove
+                        </Button>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      {group.map((id) => (
+                        <RuleRow
+                          key={id}
+                          label={labelFor(id)}
+                          description={descFor(id)}
+                          onRemove={() => removeOrFromGroup(gi, id)}
+                          compact
+                        />
+                      ))}
+                      {group.length === 0 && (
+                        <p className="text-sm text-muted-foreground italic">
+                          Empty group — add an audience below.
+                        </p>
+                      )}
+                    </div>
+                    <div className="mt-2">
+                      <AudienceSelect
+                        groups={groups}
+                        placeholder="Add to this OR group…"
+                        onPick={(id) => addOrToGroup(gi, id)}
+                        exclude={group}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </CardContent>
         </Card>
 
+        {/* ---- Build actions ---- */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <Button onClick={runSearch} disabled={loading} size="lg">
+            <Button onClick={runSearch} disabled={loading || !hasConditions} size="lg">
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
@@ -261,28 +325,37 @@ export function AudienceBuilderPage() {
               )}
               Build Audience
             </Button>
-            {(andAudiences.length > 0 || orGroups.some((g) => g.length > 0)) && (
-              <Button
-                variant="ghost"
-                size="lg"
-                onClick={() => {
-                  setAndAudiences([]);
-                  setOrGroups([[]]);
-                  setResult(null);
-                  setSearched(false);
-                }}
-              >
+            {hasConditions && (
+              <Button variant="ghost" size="lg" onClick={clearAll}>
                 <X className="h-4 w-4" /> Clear all
               </Button>
             )}
           </div>
-          <p className="text-xs text-muted-foreground max-w-md">
-            <strong className="text-foreground">AND</strong> = must match every selected audience
-            (intersection). <strong className="text-foreground">OR</strong> = must match any
-            audience in a group (union). Customers are deduplicated within the final list.
-          </p>
+          {hasConditions && (
+            <div className="flex flex-wrap gap-1.5">
+              {andAudiences.map((id) => (
+                <Badge key={`sum-${id}`} variant="outline" className="text-[11px]">
+                  {labelFor(id)}
+                </Badge>
+              ))}
+              {orGroups.some((g) => g.length > 0) && andAudiences.length > 0 && (
+                <span className="text-xs text-muted-foreground">·</span>
+              )}
+              {orGroups.map((g, gi) =>
+                g.length > 0 ? (
+                  <Badge
+                    key={`sum-or-${gi}`}
+                    className="gap-1 bg-accent/10 text-accent-foreground text-[11px]"
+                  >
+                    ANY: {g.map(labelFor).join(", ")}
+                  </Badge>
+                ) : null,
+              )}
+            </div>
+          )}
         </div>
 
+        {/* ---- Error ---- */}
         {error && (
           <Card className="border-destructive/40 bg-destructive/5">
             <CardContent className="flex items-center gap-2 p-4 text-sm text-destructive">
@@ -291,35 +364,54 @@ export function AudienceBuilderPage() {
           </Card>
         )}
 
+        {/* ---- Warnings (birthday, etc.) ---- */}
         {result && (
           <>
             {result.warnings.map((w, i) => (
               <Card key={i} className="border-warning/30 bg-warning/5">
                 <CardContent className="flex items-start gap-2 p-4 text-sm text-warning">
-                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" /> {w}
+                  <CalendarClock className="mt-0.5 h-4 w-4 shrink-0" /> {w}
                 </CardContent>
               </Card>
             ))}
 
-            {/* Stats */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-              <StatCard label="Unique Customers" value={String(result.totalCustomers)} />
-              <StatCard
+            {/* ---- KPI cards ---- */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              <KpiCard
+                icon={<Users className="h-4 w-4" />}
+                label="Unique Customers"
+                value={String(result.totalCustomers)}
+              />
+              <KpiCard
+                icon={<CheckCircle2 className="h-4 w-4" />}
                 label="Marketing Eligible"
                 value={String(result.marketingEligible)}
                 tone="success"
               />
-              <StatCard label="With Phone" value={String(result.withPhone)} />
-              <StatCard label="With Email" value={String(result.withEmail)} />
-              <StatCard label="CRM Linked" value={String(result.crmLinked)} tone="success" />
+              <KpiCard
+                icon={<Phone className="h-4 w-4" />}
+                label="With Phone"
+                value={String(result.withPhone)}
+              />
+              <KpiCard
+                icon={<Mail className="h-4 w-4" />}
+                label="With Email"
+                value={String(result.withEmail)}
+              />
+              <KpiCard
+                icon={<Link2 className="h-4 w-4" />}
+                label="CRM Linked"
+                value={String(result.crmLinked)}
+                tone="success"
+              />
             </div>
 
-            {/* Individual audience sizes */}
+            {/* ---- Individual audience sizes ---- */}
             {Object.keys(result.audienceSizes).length > 0 && (
               <Card>
                 <CardContent className="p-4">
                   <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2">
-                    Selected audience sizes
+                    Individual audience sizes
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {Object.entries(result.audienceSizes).map(([id, n]) => (
@@ -332,11 +424,13 @@ export function AudienceBuilderPage() {
               </Card>
             )}
 
-            {/* Results table */}
+            {/* ---- Results table ---- */}
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <CardTitle className="text-base">{result.totalCustomers} customers</CardTitle>
+                  <CardTitle className="text-base">
+                    {result.totalCustomers} matching customers
+                  </CardTitle>
                   <Button
                     variant="outline"
                     size="sm"
@@ -352,7 +446,7 @@ export function AudienceBuilderPage() {
                   <div className="p-8">
                     <EmptyState
                       title="No matching customers"
-                      description="No identified customers match the selected audience combination."
+                      description="No identified customers match the selected audience combination. Try widening your conditions."
                     />
                   </div>
                 ) : (
@@ -363,13 +457,55 @@ export function AudienceBuilderPage() {
           </>
         )}
 
+        {/* ---- Initial empty state ---- */}
         {!result && !error && !loading && !searched && (
           <EmptyState
             title="Build your audience"
-            description="Select audiences above and click Build Audience to find matching customers across all Clover purchase history."
+            description="Select conditions above and click Build Audience to find matching customers across all Clover purchase history. Combine AND/OR conditions to narrow or widen your reach."
           />
         )}
+
+        {/* ---- Loading state ---- */}
+        {loading && !result && (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center gap-3 p-12">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <p className="text-sm text-muted-foreground">
+                Loading customer purchase history and evaluating audiences…
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </div>
+    </div>
+  );
+}
+
+// ---- Compact rule row with description + remove ----
+function RuleRow({
+  label,
+  description,
+  onRemove,
+  compact,
+}: {
+  label: string;
+  description: string;
+  onRemove: () => void;
+  compact?: boolean;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-2 rounded-xl border border-border bg-card px-3 py-2">
+      <div className="min-w-0">
+        <span className="text-sm font-semibold text-foreground">{label}</span>
+        {!compact && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
+      </div>
+      <button
+        onClick={onRemove}
+        className="shrink-0 rounded-lg p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+        aria-label={`Remove ${label}`}
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }
@@ -418,7 +554,17 @@ function AudienceSelect({
   );
 }
 
-function StatCard({ label, value, tone }: { label: string; value: string; tone?: "success" }) {
+function KpiCard({
+  icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  tone?: "success";
+}) {
   return (
     <div
       className={
@@ -432,8 +578,15 @@ function StatCard({ label, value, tone }: { label: string; value: string; tone?:
           : undefined
       }
     >
-      <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="mt-1 text-2xl font-extrabold text-foreground">{value}</div>
+      <div className="flex items-center gap-1.5">
+        <span className={tone === "success" ? "text-success" : "text-muted-foreground"}>
+          {icon}
+        </span>
+        <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+          {label}
+        </div>
+      </div>
+      <div className="mt-1.5 text-2xl font-extrabold text-foreground">{value}</div>
     </div>
   );
 }
