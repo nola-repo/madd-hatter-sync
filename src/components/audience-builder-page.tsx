@@ -72,16 +72,23 @@ export function AudienceBuilderPage() {
     try {
       const cleanOr = orGroups.filter((g) => g.length > 0);
       const res = await runFn({ data: { andAudiences, orGroups: cleanOr } });
-      if (res && "setupRequired" in res && res.setupRequired) {
+      if (typeof res === "string" && (res.includes("<!DOCTYPE") || res.includes("<html"))) {
+        setError(
+          "Unable to build audience right now. Please refresh and ensure you are signed in.",
+        );
+        setResult(null);
+        return;
+      }
+      if (res && typeof res === "object" && "setupRequired" in res && res.setupRequired) {
         setError("Integration not configured. Please complete setup in Settings.");
         return;
       }
-      if (res && "error" in res && res.error) {
+      if (res && typeof res === "object" && "error" in res && res.error) {
         setError(res.error);
         setResult(null);
         return;
       }
-      if (res && "result" in res && res.result) {
+      if (res && typeof res === "object" && "result" in res && res.result) {
         setResult(res.result);
       }
     } catch (e) {
@@ -380,8 +387,24 @@ export function AudienceBuilderPage() {
         <div className="flex min-w-0 flex-col gap-4">
           {/* ---- Error ---- */}
           {error && (
-            <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-              <AlertTriangle className="h-4 w-4 shrink-0" /> {error}
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>
+                  {typeof error === "string" &&
+                  (error.includes("<!DOCTYPE") || error.includes("<html"))
+                    ? "Server returned an error response. Please re-sign in or check your connection."
+                    : error}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setError(null)}
+                className="shrink-0 rounded-md p-1 hover:bg-destructive/10"
+                aria-label="Dismiss"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
           )}
 

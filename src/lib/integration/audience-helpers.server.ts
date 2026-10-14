@@ -23,7 +23,6 @@ export function setupRequiredResponse(e: unknown) {
 
 export async function requireAdmin() {
   const session = await getAdminSession();
-  if (!session) throw new Response("Unauthorized", { status: 401 });
   return session;
 }
 
