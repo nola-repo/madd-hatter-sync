@@ -111,7 +111,7 @@ export async function loadAggregates(): Promise<{
 
   const { data: mapRows, error: mErr } = await sb
     .from("customer_mappings")
-    .select("clover_customer_id,ghl_contact_id,match_method")
+    .select("clover_customer_id,ghl_contact_id,matched_by")
     .eq("clover_merchant_id", mid);
   if (mErr) throw new Error(`Audience: customer_mappings query failed: ${mErr.message}`);
 
@@ -150,7 +150,7 @@ export async function loadAggregates(): Promise<{
         marketingAllowed: c?.marketing_allowed ?? null,
         createdAt: c?.created_at ?? new Date().toISOString(),
         ghlContactId: m?.ghl_contact_id ?? null,
-        matchMethod: m?.match_method ?? null,
+        matchMethod: m?.matched_by ?? null,
         orders: [],
         items: [],
         lifetimeSpend: 0,

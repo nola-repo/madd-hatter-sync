@@ -146,18 +146,29 @@ export function resolveAudience(id: AudienceId, customers: CustomerAgg[]): Set<s
         match = c.orders.some((o) => UFC_EVENT_DATES.some((d) => inEventWindow(o.created_time, d)));
         break;
       case "halloween":
-        match = c.orders.some((o) => HALLOWEEN_DATES.some((d) => inEventWindow(o.created_time, d)));
+        // Master plan: "All identifiable visits on Halloween event date" — full
+        // calendar day, not just the 8 PM–close nightlife window.
+        match = c.orders.some((o) => HALLOWEEN_DATES.some((d) => isDate(o.created_time, d)));
         break;
       case "thanksgiving_eve":
-        match = c.orders.some((o) =>
-          THANKSGIVING_EVE_DATES.some((d) => inEventWindow(o.created_time, d)),
-        );
+        // Master plan: "All identifiable visitors" — full calendar day. The
+        // "optional nightlife subset 7 PM-close" is a subset, not the definition.
+        match = c.orders.some((o) => THANKSGIVING_EVE_DATES.some((d) => isDate(o.created_time, d)));
         break;
       case "thanksgiving_day":
         match = c.orders.some((o) => THANKSGIVING_DAY_DATES.some((d) => isDate(o.created_time, d)));
         break;
       case "repeat_special_event":
-        match = c.eventNights.size >= 2;
+        // Master plan #32: "two or more distinct major event nights, including
+        // UFC, Halloween, and Thanksgiving Eve." Thanksgiving Day is NOT a
+        // "night" and is excluded from the repeat count.
+        match =
+          Array.from(c.eventNights).filter(
+            (e) =>
+              !e.startsWith("2023-11-23") &&
+              !e.startsWith("2024-11-28") &&
+              !e.startsWith("2025-11-27"),
+          ).length >= 2;
         break;
 
       // ---- Birthday (34) — month subsegments ----

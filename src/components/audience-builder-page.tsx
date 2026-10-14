@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -42,7 +42,6 @@ export function AudienceBuilderPage() {
   const runFn = useServerFn(buildAudienceFn);
 
   const [catalog, setCatalog] = useState<AudienceMeta[]>([]);
-  const [catalogLoaded, setCatalogLoaded] = useState(false);
   const [andAudiences, setAndAudiences] = useState<string[]>([]);
   const [orGroups, setOrGroups] = useState<string[][]>([[]]);
   const [result, setResult] = useState<AudienceResult | null>(null);
@@ -50,13 +49,18 @@ export function AudienceBuilderPage() {
   const [error, setError] = useState<string | null>(null);
   const [searched, setSearched] = useState(false);
 
-  // Load catalog once.
-  if (!catalogLoaded) {
-    setCatalogLoaded(true);
+  // Load catalog once on mount.
+  useEffect(() => {
+    let cancelled = false;
     void catalogFn()
-      .then((r) => setCatalog(r.audiences as AudienceMeta[]))
+      .then((r) => {
+        if (!cancelled) setCatalog(r.audiences as AudienceMeta[]);
+      })
       .catch(() => {});
-  }
+    return () => {
+      cancelled = true;
+    };
+  }, [catalogFn]);
 
   const runSearch = useCallback(async () => {
     setLoading(true);
@@ -71,8 +75,9 @@ export function AudienceBuilderPage() {
       }
       const r = res as { result: AudienceResult };
       setResult(r.result);
-    } catch (e: any) {
-      setError(e?.message ?? "Failed to build audience.");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to build audience.";
+      setError(msg);
       setResult(null);
     } finally {
       setLoading(false);
@@ -129,7 +134,7 @@ export function AudienceBuilderPage() {
       "Marketing Eligible": c.marketingAllowed === false ? "No" : "Yes",
       "Matching Audiences": c.matchingAudiences.map(labelFor).join("; "),
     }));
-    const csv = toCsv(rows as any, [
+    const csv = toCsv(rows, [
       { key: "Full Name", label: "Full Name" },
       { key: "First Name", label: "First Name" },
       { key: "Last Name", label: "Last Name" },
