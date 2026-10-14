@@ -251,15 +251,36 @@ export function AudienceBuilderPage() {
           </CardContent>
         </Card>
 
-        <div className="flex items-center gap-3">
-          <Button onClick={runSearch} disabled={loading} size="lg">
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Sparkles className="h-4 w-4" />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <Button onClick={runSearch} disabled={loading} size="lg">
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              Build Audience
+            </Button>
+            {(andAudiences.length > 0 || orGroups.some((g) => g.length > 0)) && (
+              <Button
+                variant="ghost"
+                size="lg"
+                onClick={() => {
+                  setAndAudiences([]);
+                  setOrGroups([[]]);
+                  setResult(null);
+                  setSearched(false);
+                }}
+              >
+                <X className="h-4 w-4" /> Clear all
+              </Button>
             )}
-            Build Audience
-          </Button>
+          </div>
+          <p className="text-xs text-muted-foreground max-w-md">
+            <strong className="text-foreground">AND</strong> = must match every selected audience
+            (intersection). <strong className="text-foreground">OR</strong> = must match any
+            audience in a group (union). Customers are deduplicated within the final list.
+          </p>
         </div>
 
         {error && (
@@ -371,7 +392,7 @@ function AudienceSelect({
         onPick(v);
       }}
     >
-      <SelectTrigger className="w-full sm:w-72">
+      <SelectTrigger className="w-full sm:w-80">
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>
@@ -384,7 +405,10 @@ function AudienceSelect({
               .filter((a) => !exclude.includes(a.id))
               .map((a) => (
                 <SelectItem key={a.id} value={a.id}>
-                  {a.label}
+                  <div className="flex flex-col">
+                    <span>{a.label}</span>
+                    <span className="text-[11px] text-muted-foreground">{a.description}</span>
+                  </div>
                 </SelectItem>
               ))}
           </div>
