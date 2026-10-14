@@ -1,4 +1,4 @@
-import { X, Phone, Mail, Link2, CheckCircle2 } from "lucide-react";
+import { X, Phone, Mail, Link2, CheckCircle2, Plus, ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -35,27 +35,32 @@ function formatDate(ms: number): string {
   });
 }
 
-// ---- Compact rule row with description + remove ----
+/* ------------------------------------------------------------------ */
+/* Compact list-style rule row — accent dot + name + desc + remove.    */
+/* No bordered card; reads like a CRM filter chip row.                 */
+/* ------------------------------------------------------------------ */
 export function RuleRow({
   label,
   description,
   onRemove,
-  compact,
+  tone = "and",
 }: {
   label: string;
   description: string;
   onRemove: () => void;
-  compact?: boolean;
+  tone?: "and" | "or";
 }) {
+  const dot = tone === "and" ? "bg-primary" : "bg-accent";
   return (
-    <div className="flex items-start justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:border-primary/30">
+    <div className="group flex items-center gap-3 rounded-xl bg-muted/40 px-3 py-2.5 transition-colors hover:bg-muted/70">
+      <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} aria-hidden />
       <div className="min-w-0 flex-1">
-        <span className="text-sm font-bold text-foreground">{label}</span>
-        {!compact && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
+        <p className="truncate text-sm font-bold text-foreground">{label}</p>
+        <p className="truncate text-xs text-muted-foreground">{description}</p>
       </div>
       <button
         onClick={onRemove}
-        className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+        className="shrink-0 rounded-lg p-1.5 text-muted-foreground opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100"
         aria-label={`Remove ${label}`}
       >
         <X className="h-4 w-4" />
@@ -64,7 +69,12 @@ export function RuleRow({
   );
 }
 
-export function AudienceSelect({
+/* ------------------------------------------------------------------ */
+/* Inline add-control: a ghost trigger that opens the audience select.  */
+/* Replaces the wide standalone dropdown with a compact, discoverable  */
+/* affordance that matches the rule rows.                              */
+/* ------------------------------------------------------------------ */
+export function AddCondition({
   groups,
   placeholder,
   onPick,
@@ -76,14 +86,13 @@ export function AudienceSelect({
   exclude: string[];
 }) {
   return (
-    <Select
-      value=""
-      onValueChange={(v) => {
-        onPick(v);
-      }}
-    >
-      <SelectTrigger className="w-full sm:w-96">
-        <SelectValue placeholder={placeholder} />
+    <Select value="" onValueChange={onPick}>
+      <SelectTrigger className="h-9 w-full border-dashed bg-transparent text-sm font-semibold text-muted-foreground hover:bg-muted/40 hover:text-foreground">
+        <span className="flex items-center gap-2">
+          <Plus className="h-4 w-4" />
+          <SelectValue placeholder={placeholder} />
+        </span>
+        <ChevronDown className="h-4 w-4 opacity-60" />
       </SelectTrigger>
       <SelectContent>
         {groups.map(([group, items]) => (
@@ -108,49 +117,60 @@ export function AudienceSelect({
   );
 }
 
-export function KpiCard({
-  icon,
-  label,
-  value,
-  tone,
+/* ------------------------------------------------------------------ */
+/* KPI strip — single horizontal bar, not five separate cards.         */
+/* Dividers separate metrics; success tones tint the relevant cells.   */
+/* ------------------------------------------------------------------ */
+export function KpiStrip({
+  total,
+  eligible,
+  phone,
+  email,
+  crm,
 }: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  tone?: "success";
+  total: number;
+  eligible: number;
+  phone: number;
+  email: number;
+  crm: number;
 }) {
+  const items = [
+    { label: "Customers", value: total, tone: "neutral" as const },
+    { label: "Mktg Eligible", value: eligible, tone: "success" as const },
+    { label: "Phone", value: phone, tone: "neutral" as const },
+    { label: "Email", value: email, tone: "neutral" as const },
+    { label: "CRM Linked", value: crm, tone: "success" as const },
+  ];
   return (
-    <div
-      className={
-        tone === "success"
-          ? "rounded-2xl border border-success/25 p-5 shadow-sm"
-          : "rounded-2xl border border-border bg-card p-5 shadow-sm"
-      }
-      style={
-        tone === "success"
-          ? { backgroundColor: "color-mix(in oklab, var(--success) 8%, var(--card))" }
-          : undefined
-      }
-    >
-      <div className="flex items-center gap-2">
-        <span
+    <div className="grid grid-cols-2 divide-x divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card shadow-sm sm:grid-cols-3 sm:divide-y-0 lg:grid-cols-5">
+      {items.map((it) => (
+        <div
+          key={it.label}
           className={
-            tone === "success"
-              ? "flex h-8 w-8 items-center justify-center rounded-lg bg-success/15 text-success"
-              : "flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground"
+            "flex flex-col gap-1 px-4 py-3.5 " +
+            (it.tone === "success" ? "bg-[color-mix(in_oklab,var(--success)_7%,var(--card))]" : "")
           }
         >
-          {icon}
-        </span>
-        <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-          {label}
+          <span
+            className={
+              "text-xs font-bold uppercase tracking-wide " +
+              (it.tone === "success" ? "text-success" : "text-muted-foreground")
+            }
+          >
+            {it.label}
+          </span>
+          <span className="text-2xl font-extrabold tabular-nums text-foreground">
+            {it.value.toLocaleString()}
+          </span>
         </div>
-      </div>
-      <div className="mt-3 text-3xl font-extrabold text-foreground">{value}</div>
+      ))}
     </div>
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* Results table — CRM data-table with aligned columns + dividers.     */
+/* ------------------------------------------------------------------ */
 export function ResultsTable({
   customers,
   labelFor,
@@ -166,36 +186,36 @@ export function ResultsTable({
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
-            <TableRow className="bg-muted/30">
-              <TableHead className="h-11 px-4 text-xs font-bold uppercase tracking-wide">
+            <TableRow className="border-border bg-muted/30 hover:bg-muted/30">
+              <TableHead className="h-10 px-4 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
                 Customer
               </TableHead>
-              <TableHead className="h-11 px-4 text-xs font-bold uppercase tracking-wide">
+              <TableHead className="h-10 px-4 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
                 Phone
               </TableHead>
-              <TableHead className="h-11 px-4 text-xs font-bold uppercase tracking-wide">
+              <TableHead className="h-10 px-4 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
                 Email
               </TableHead>
-              <TableHead className="h-11 px-4 text-right text-xs font-bold uppercase tracking-wide">
+              <TableHead className="h-10 px-4 text-right text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
                 Lifetime Spend
               </TableHead>
-              <TableHead className="h-11 px-4 text-right text-xs font-bold uppercase tracking-wide">
+              <TableHead className="h-10 px-4 text-right text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
                 Visits
               </TableHead>
-              <TableHead className="h-11 px-4 text-xs font-bold uppercase tracking-wide">
+              <TableHead className="h-10 px-4 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
                 Last Visit
               </TableHead>
-              <TableHead className="h-11 px-4 text-xs font-bold uppercase tracking-wide">
+              <TableHead className="h-10 px-4 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
                 CRM
               </TableHead>
-              <TableHead className="h-11 px-4 text-xs font-bold uppercase tracking-wide">
-                Matching Audiences
+              <TableHead className="h-10 px-4 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                Audiences
               </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {pagedRows.map((c) => (
-              <TableRow key={c.cloverCustomerId} className="hover:bg-muted/30">
+              <TableRow key={c.cloverCustomerId} className="border-border hover:bg-muted/30">
                 <TableCell className="px-4 py-3 font-semibold text-foreground">
                   {c.fullName}
                 </TableCell>
@@ -205,34 +225,34 @@ export function ResultsTable({
                 <TableCell className="px-4 py-3 text-sm text-muted-foreground">
                   {c.email ?? "—"}
                 </TableCell>
-                <TableCell className="px-4 py-3 text-right font-semibold">
+                <TableCell className="px-4 py-3 text-right font-semibold tabular-nums">
                   {money(c.lifetimeSpendCents)}
                 </TableCell>
-                <TableCell className="px-4 py-3 text-right tabular-nums">{c.visitCount}</TableCell>
+                <TableCell className="px-4 py-3 text-right tabular-nums text-muted-foreground">
+                  {c.visitCount}
+                </TableCell>
                 <TableCell className="px-4 py-3 text-sm text-muted-foreground">
                   {formatDate(c.lastVisitMs)}
                 </TableCell>
                 <TableCell className="px-4 py-3">
                   {c.ghlContactId ? (
-                    <Badge className="gap-1 bg-success/15 text-success hover:bg-success/20">
+                    <span className="inline-flex items-center gap-1 rounded-md bg-success/15 px-2 py-0.5 text-xs font-bold text-success">
                       <Link2 className="h-3 w-3" /> Linked
-                    </Badge>
+                    </span>
                   ) : (
-                    <Badge variant="outline" className="text-muted-foreground">
-                      Unlinked
-                    </Badge>
+                    <span className="text-xs text-muted-foreground">Unlinked</span>
                   )}
                 </TableCell>
                 <TableCell className="px-4 py-3">
                   <div className="flex flex-wrap gap-1">
-                    {c.matchingAudiences.slice(0, 3).map((id) => (
-                      <Badge key={id} variant="outline" className="text-[10px]">
+                    {c.matchingAudiences.slice(0, 2).map((id) => (
+                      <Badge key={id} variant="outline" className="text-[10px] font-semibold">
                         {labelFor(id)}
                       </Badge>
                     ))}
-                    {c.matchingAudiences.length > 3 && (
+                    {c.matchingAudiences.length > 2 && (
                       <Badge variant="outline" className="text-[10px]">
-                        +{c.matchingAudiences.length - 3}
+                        +{c.matchingAudiences.length - 2}
                       </Badge>
                     )}
                   </div>
@@ -249,5 +269,4 @@ export function ResultsTable({
   );
 }
 
-// Re-export icons used by the page so they stay in one import graph.
 export { Phone, Mail, Link2, CheckCircle2 };
