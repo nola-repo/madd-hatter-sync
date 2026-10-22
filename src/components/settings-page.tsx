@@ -83,7 +83,7 @@ export function SettingsPage() {
     setSetupRequired(null);
     try {
       const res = await getStatusFn();
-      if (res?.setupRequired) {
+      if (res && "setupRequired" in res && res.setupRequired) {
         setSetupRequired((res as any).missing);
       } else {
         setStatus(res as ConnectionStatus);
