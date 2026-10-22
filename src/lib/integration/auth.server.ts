@@ -70,7 +70,21 @@ async function verifyToken(accessToken: string): Promise<AdminSession> {
         const sb = getSupabaseServer(); // uses SUPABASE_SECRET_KEY (server-only)
         const { data, error } = await sb.auth.getUser(accessToken);
         if (error || !data.user) return null;
-        return { userId: data.user.id, email: data.user.email ?? "" };
+        const u = data.user;
+        const meta = u.user_metadata || {};
+        const fullName =
+            (meta.full_name as string) ||
+            (meta.name as string) ||
+            (u.email ? u.email.split("@")[0].replace(/[._-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "Administrator");
+        return {
+            userId: u.id,
+            email: u.email ?? "",
+            role: u.role || "authenticated",
+            fullName,
+            createdAt: u.created_at,
+            lastSignInAt: u.last_sign_in_at || null,
+            userMetadata: meta,
+        };
     } catch (e) {
         // Log the error reason (never the token) so failures are diagnosable.
         console.error("[auth] token verification failed:", (e as Error)?.message ?? e);
@@ -171,3 +185,119 @@ export async function getAdminSession(): Promise<AdminSession> {
         return null;
     }
 }
+
+/**
+ * Retrieve user profile data from the database for the active admin session.
+ */
+export async function getUserProfileServer(sessionOverride?: AdminSession): Promise<{
+    userId: string;
+    email: string;
+    fullName: string;
+    role: string;
+    createdAt: string;
+    lastSignInAt: string | null;
+    timezone: string;
+    syncAlerts: boolean;
+    reconciliationDigest: boolean;
+    tagAuditWarnings: boolean;
+} | null> {
+    const session = sessionOverride || (await getAdminSession());
+    if (!session || !session.userId) return null;
+
+    const sb = getSupabaseServer();
+    try {
+        const { data, error } = await sb.auth.admin.getUserById(session.userId);
+        if (error || !data.user) {
+            const meta = session.userMetadata || {};
+            return {
+                userId: session.userId,
+                email: session.email,
+                fullName: session.fullName || "Madd Hatter Admin",
+                role: session.role || "Super Administrator",
+                createdAt: session.createdAt || new Date().toISOString(),
+                lastSignInAt: session.lastSignInAt || null,
+                timezone: (meta.timezone as string) || "America/New_York (Hoboken / Eastern)",
+                syncAlerts: meta.sync_alerts !== false,
+                reconciliationDigest: meta.reconciliation_digest !== false,
+                tagAuditWarnings: meta.tag_audit_warnings === true,
+            };
+        }
+
+        const u = data.user;
+        const meta = u.user_metadata || {};
+        return {
+            userId: u.id,
+            email: u.email || session.email,
+            fullName:
+                (meta.full_name as string) ||
+                (meta.name as string) ||
+                (u.email ? u.email.split("@")[0].replace(/[._-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "Administrator"),
+            role: "Super Administrator",
+            createdAt: u.created_at,
+            lastSignInAt: u.last_sign_in_at || null,
+            timezone: (meta.timezone as string) || "America/New_York (Hoboken / Eastern)",
+            syncAlerts: meta.sync_alerts !== false,
+            reconciliationDigest: meta.reconciliation_digest !== false,
+            tagAuditWarnings: meta.tag_audit_warnings === true,
+        };
+    } catch (e) {
+        console.error("[auth] getUserProfileServer error:", (e as Error)?.message ?? e);
+        return null;
+    }
+}
+
+/**
+ * Update the user credentials / profile directly in Supabase DB via auth.admin API.
+ */
+export async function updateUserProfileServer(
+    input: {
+        fullName?: string;
+        timezone?: string;
+        syncAlerts?: boolean;
+        reconciliationDigest?: boolean;
+        tagAuditWarnings?: boolean;
+        newPassword?: string;
+    },
+    sessionOverride?: AdminSession,
+): Promise<{ ok: boolean; error?: string }> {
+    const session = sessionOverride || (await getAdminSession());
+    if (!session || !session.userId) {
+        return { ok: false, error: "Active admin session required" };
+    }
+
+    const sb = getSupabaseServer();
+    try {
+        const updatePayload: {
+            password?: string;
+            user_metadata?: Record<string, any>;
+        } = {};
+
+        if (input.newPassword) {
+            if (input.newPassword.length < 8) {
+                return { ok: false, error: "New password must be at least 8 characters long." };
+            }
+            updatePayload.password = input.newPassword;
+        }
+
+        const { data: userRes } = await sb.auth.admin.getUserById(session.userId);
+        const existingMeta = userRes?.user?.user_metadata || session.userMetadata || {};
+
+        updatePayload.user_metadata = {
+            ...existingMeta,
+            ...(input.fullName !== undefined ? { full_name: input.fullName } : {}),
+            ...(input.timezone !== undefined ? { timezone: input.timezone } : {}),
+            ...(input.syncAlerts !== undefined ? { sync_alerts: input.syncAlerts } : {}),
+            ...(input.reconciliationDigest !== undefined ? { reconciliation_digest: input.reconciliationDigest } : {}),
+            ...(input.tagAuditWarnings !== undefined ? { tag_audit_warnings: input.tagAuditWarnings } : {}),
+        };
+
+        const { error } = await sb.auth.admin.updateUserById(session.userId, updatePayload);
+        if (error) {
+            return { ok: false, error: error.message };
+        }
+        return { ok: true };
+    } catch (e: any) {
+        return { ok: false, error: e?.message ?? "Failed to update profile credentials" };
+    }
+}
+

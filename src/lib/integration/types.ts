@@ -169,7 +169,25 @@ export type SyncResult = {
 export type AdminSession = {
     userId: string;
     email: string;
+    role?: string;
+    fullName?: string;
+    createdAt?: string;
+    lastSignInAt?: string | null;
+    userMetadata?: Record<string, any>;
 } | null;
+
+export type UserProfileData = {
+    userId: string;
+    email: string;
+    fullName: string;
+    role: string;
+    createdAt: string;
+    lastSignInAt: string | null;
+    timezone: string;
+    syncAlerts: boolean;
+    reconciliationDigest: boolean;
+    tagAuditWarnings: boolean;
+};
 
 // ---- POS data / dashboard types (browser-safe DTOs) -------------------
 

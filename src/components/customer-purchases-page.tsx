@@ -2,42 +2,71 @@ import { useState, useEffect, useCallback } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { getCustomerPurchasesListFn } from "@/lib/integration/integration.functions";
 import type { CustomerPurchaseRow } from "@/lib/integration/pos-data.server";
-
-function formatMoney(cents: number): string {
-    return `$${(cents / 100).toFixed(2)}`;
-}
-
-function formatDate(ms: number): string {
-    if (!ms) return "—";
-    return new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
+import { PageHeader, EmptyState } from "@/components/page-header";
+import { TableSkeleton } from "@/components/ui/table-skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import {
+    Search,
+    RefreshCw,
+    Users,
+    CheckCircle2,
+    DollarSign,
+    ShoppingBag,
+    ChevronLeft,
+    ChevronRight,
+    Loader2,
+} from "lucide-react";
+import { money, formatDateTime, relativeTime } from "@/lib/integration/format";
 
 function MatchBadge({ status }: { status: string }) {
-    const map: Record<string, { color: string; bg: string; label: string }> = {
-        MATCHED: { color: "#16a34a", bg: "#dcfce7", label: "CRM Matched" },
-        AUTO_CREATED: { color: "#0891b2", bg: "#cffafe", label: "Auto Created" },
-        NO_GHL_MATCH: { color: "#d97706", bg: "#fef9c3", label: "No CRM Match" },
-        NO_IDENTIFIERS: { color: "#dc2626", bg: "#fee2e2", label: "No Contact Info" },
-    };
-    const c = map[status] ?? { color: "#6b7280", bg: "#f3f4f6", label: status };
+    if (status === "MATCHED") {
+        return (
+            <Badge
+                variant="outline"
+                className="border-emerald-800/40 bg-emerald-950/40 text-emerald-400 text-[10px]"
+            >
+                CRM Matched
+            </Badge>
+        );
+    }
+    if (status === "AUTO_CREATED") {
+        return (
+            <Badge
+                variant="outline"
+                className="border-blue-800/40 bg-blue-950/40 text-blue-400 text-[10px]"
+            >
+                Auto Created
+            </Badge>
+        );
+    }
+    if (status === "NO_GHL_MATCH") {
+        return (
+            <Badge
+                variant="outline"
+                className="border-amber-800/40 bg-amber-950/40 text-amber-400 text-[10px]"
+            >
+                No CRM Match
+            </Badge>
+        );
+    }
     return (
-        <span
-            style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 5,
-                background: c.bg,
-                color: c.color,
-                borderRadius: 20,
-                padding: "2px 10px",
-                fontSize: 11,
-                fontWeight: 600,
-                whiteSpace: "nowrap",
-            }}
+        <Badge
+            variant="outline"
+            className="border-zinc-800 bg-zinc-900 text-zinc-400 text-[10px]"
         >
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: c.color, flexShrink: 0 }} />
-            {c.label}
-        </span>
+            {status}
+        </Badge>
     );
 }
 
@@ -45,50 +74,31 @@ function ItemChips({ items }: { items: CustomerPurchaseRow["itemsPurchased"] }) 
     const [expanded, setExpanded] = useState(false);
     const shown = expanded ? items : items.slice(0, 4);
     const more = items.length - 4;
-    const palette = ["#ede9fe", "#cffafe", "#fce7f3", "#fef9c3", "#d1fae5", "#dbeafe"];
-    const textPalette = ["#7c3aed", "#0891b2", "#be185d", "#92400e", "#065f46", "#1d4ed8"];
 
     return (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
-            {shown.map((item, i) => (
+        <div className="flex flex-wrap gap-1.5 items-center">
+            {shown.map((item) => (
                 <span
                     key={item.name}
                     title={`${item.name} × ${item.qty}`}
-                    style={{
-                        background: palette[i % palette.length],
-                        color: textPalette[i % textPalette.length],
-                        borderRadius: 20,
-                        padding: "2px 8px",
-                        fontSize: 11,
-                        fontWeight: 500,
-                        whiteSpace: "nowrap",
-                        maxWidth: 120,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                    }}
+                    className="inline-flex items-center gap-1 rounded-md bg-[#18181B] px-2 py-0.5 text-[11px] text-[#E4E4E7] border border-[#27272A] truncate max-w-[140px]"
                 >
-                    {item.name}{item.qty > 1 && <span style={{ opacity: 0.65, marginLeft: 3 }}>×{item.qty}</span>}
+                    <span className="truncate">{item.name}</span>
+                    {item.qty > 1 && (
+                        <span className="font-mono text-[10px] text-zinc-400">×{item.qty}</span>
+                    )}
                 </span>
             ))}
             {!expanded && more > 0 && (
                 <button
                     onClick={() => setExpanded(true)}
-                    style={{
-                        background: "#f3f4f6",
-                        border: "1px solid #e5e7eb",
-                        borderRadius: 20,
-                        padding: "2px 8px",
-                        fontSize: 11,
-                        color: "#6b7280",
-                        cursor: "pointer",
-                        whiteSpace: "nowrap",
-                    }}
+                    className="rounded-md bg-[#141417] border border-[#27272A] px-1.5 py-0.5 text-[10px] text-[#A1A1AA] hover:text-white transition-colors"
                 >
                     +{more} more
                 </button>
             )}
             {items.length === 0 && (
-                <span style={{ fontSize: 11, color: "#9ca3af", fontStyle: "italic" }}>No items</span>
+                <span className="text-[11px] text-[#52525B] italic">No items recorded</span>
             )}
         </div>
     );
@@ -111,7 +121,9 @@ export function CustomerPurchasesPage() {
             setLoading(true);
             setError(null);
             try {
-                const res = await fetchFn({ data: { search: q || undefined, limit: LIMIT, offset: p * LIMIT } });
+                const res = await fetchFn({
+                    data: { search: q || undefined, limit: LIMIT, offset: p * LIMIT },
+                });
                 if (res && "setupRequired" in res && res.setupRequired) {
                     setError("Integration not configured. Please complete setup in Settings.");
                     return;
@@ -128,8 +140,9 @@ export function CustomerPurchasesPage() {
         [fetchFn],
     );
 
-    // Auto-load on mount
-    useEffect(() => { load("", 0); }, [load]);
+    useEffect(() => {
+        load("", 0);
+    }, [load]);
 
     const handleSearch = (q: string) => {
         setSearch(q);
@@ -138,238 +151,260 @@ export function CustomerPurchasesPage() {
         load(q, 0);
     };
 
-    const handlePage = (p: number) => { setPage(p); load(search, p); };
+    const handlePage = (p: number) => {
+        setPage(p);
+        load(search, p);
+    };
 
-    // Collect all unique product names for the filter dropdown
     const allProducts = Array.from(
-        new Set(rows.flatMap((r) => r.itemsPurchased.map((i) => i.name)))
+        new Set(rows.flatMap((r) => r.itemsPurchased.map((i) => i.name))),
     ).sort();
 
-    // Apply product filter client-side
-    const filtered = productFilter === "all"
-        ? rows
-        : rows.filter((r) => r.itemsPurchased.some((i) => i.name === productFilter));
+    const filtered =
+        productFilter === "all"
+            ? rows
+            : rows.filter((r) => r.itemsPurchased.some((i) => i.name === productFilter));
 
     const totalPages = Math.ceil(total / LIMIT);
-    const matched = rows.filter((r) => r.matchStatus === "MATCHED" || r.matchStatus === "AUTO_CREATED").length;
+    const matched = rows.filter(
+        (r) => r.matchStatus === "MATCHED" || r.matchStatus === "AUTO_CREATED",
+    ).length;
     const totalSpend = rows.reduce((s, r) => s + r.totalSpendCents, 0);
 
     return (
-        <div style={{ padding: "28px 32px", fontFamily: "'Inter', system-ui, sans-serif", color: "#111827" }}>
-            {/* Header */}
-            <div style={{ marginBottom: 24 }}>
-                <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#111827" }}>Customer Purchases</h1>
-                <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6b7280" }}>
-                    Every Clover customer with their purchased products & CRM match status
-                </p>
-            </div>
-
-            {/* Stats */}
-            <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-                {[
-                    { label: "Total Customers", value: total, color: "#111827" },
-                    { label: "CRM Linked", value: matched, color: "#16a34a" },
-                    { label: "No CRM Match", value: rows.length - matched, color: "#d97706" },
-                    { label: "Total Spend", value: formatMoney(totalSpend), color: "#7c3aed" },
-                ].map((s) => (
-                    <div
-                        key={s.label}
-                        style={{
-                            flex: "1 1 140px",
-                            background: "#fff",
-                            border: "1px solid #e5e7eb",
-                            borderRadius: 10,
-                            padding: "14px 18px",
-                            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-                        }}
+        <div className="space-y-6">
+            <PageHeader
+                title="Customer Purchases"
+                description="Comprehensive registry linking Clover customers with purchased menu items and CRM synchronization status."
+                actions={
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => load(search, page)}
+                        disabled={loading}
+                        className="border-[#27272A] bg-[#141417] text-xs hover:bg-[#1E1E24]"
                     >
-                        <div style={{ fontSize: 11, fontWeight: 600, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>{s.label}</div>
-                        <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
-                    </div>
-                ))}
+                        <RefreshCw className={`mr-2 h-3.5 w-3.5 text-zinc-400 ${loading ? "animate-spin" : ""}`} />
+                        Refresh
+                    </Button>
+                }
+            />
+
+            {/* Metrics */}
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <Card className="border-[#222226] bg-[#111113]">
+                    <CardContent className="p-4">
+                        <div className="flex items-center justify-between text-xs text-[#A1A1AA]">
+                            <span>Total Customers</span>
+                            <Users className="h-4 w-4 text-zinc-400" />
+                        </div>
+                        <div className="mt-2 text-2xl font-bold font-mono text-white">
+                            {loading ? <Skeleton className="h-8 w-24 bg-zinc-800" /> : total.toLocaleString()}
+                        </div>
+                        <div className="mt-1 text-[11px] text-[#71717A]">In scope</div>
+                    </CardContent>
+                </Card>
+
+                <Card className="border-[#222226] bg-[#111113]">
+                    <CardContent className="p-4">
+                        <div className="flex items-center justify-between text-xs text-[#A1A1AA]">
+                            <span>CRM Linked</span>
+                            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                        </div>
+                        <div className="mt-2 text-2xl font-bold font-mono text-emerald-400">
+                            {loading ? <Skeleton className="h-8 w-20 bg-zinc-800" /> : `${matched} / ${rows.length}`}
+                        </div>
+                        <div className="mt-1 text-[11px] text-[#71717A]">Mapped to GoHighLevel</div>
+                    </CardContent>
+                </Card>
+
+                <Card className="border-[#222226] bg-[#111113]">
+                    <CardContent className="p-4">
+                        <div className="flex items-center justify-between text-xs text-[#A1A1AA]">
+                            <span>Unmatched</span>
+                            <Users className="h-4 w-4 text-amber-400" />
+                        </div>
+                        <div className="mt-2 text-2xl font-bold font-mono text-amber-400">
+                            {loading ? <Skeleton className="h-8 w-16 bg-zinc-800" /> : rows.length - matched}
+                        </div>
+                        <div className="mt-1 text-[11px] text-[#71717A]">Pending identifier matching</div>
+                    </CardContent>
+                </Card>
+
+                <Card className="border-[#222226] bg-[#111113]">
+                    <CardContent className="p-4">
+                        <div className="flex items-center justify-between text-xs text-[#A1A1AA]">
+                            <span>Total Spend</span>
+                            <DollarSign className="h-4 w-4 text-purple-400" />
+                        </div>
+                        <div className="mt-2 text-2xl font-bold font-mono text-white">
+                            {loading ? <Skeleton className="h-8 w-28 bg-zinc-800" /> : money(totalSpend)}
+                        </div>
+                        <div className="mt-1 text-[11px] text-[#71717A]">Current dataset total</div>
+                    </CardContent>
+                </Card>
             </div>
 
-            {/* Filters row */}
-            <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-                <input
-                    type="text"
-                    placeholder="Search by name, email, or phone…"
-                    value={search}
-                    onChange={(e) => handleSearch(e.target.value)}
-                    style={{
-                        flex: "1 1 260px",
-                        maxWidth: 400,
-                        border: "1px solid #d1d5db",
-                        borderRadius: 8,
-                        padding: "8px 14px",
-                        fontSize: 13,
-                        color: "#111827",
-                        outline: "none",
-                        background: "#fff",
-                    }}
-                />
-                {/* Product filter dropdown */}
-                <select
-                    value={productFilter}
-                    onChange={(e) => setProductFilter(e.target.value)}
-                    style={{
-                        border: "1px solid #d1d5db",
-                        borderRadius: 8,
-                        padding: "8px 32px 8px 12px",
-                        fontSize: 13,
-                        color: productFilter === "all" ? "#6b7280" : "#111827",
-                        background: "#fff",
-                        cursor: "pointer",
-                        fontWeight: productFilter === "all" ? 400 : 600,
-                        minWidth: 180,
-                        outline: "none",
-                        appearance: "none",
-                        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
-                        backgroundRepeat: "no-repeat",
-                        backgroundPosition: "right 10px center",
-                    }}
-                >
-                    <option value="all">All Products</option>
-                    {allProducts.map((p) => (
-                        <option key={p} value={p}>{p}</option>
-                    ))}
-                </select>
-                {loading && <span style={{ fontSize: 12, color: "#6b7280" }}>Loading…</span>}
-                {productFilter !== "all" && (
-                    <span style={{ fontSize: 12, color: "#6b7280" }}>
-                        {filtered.length} customer{filtered.length !== 1 ? "s" : ""} purchased <strong>{productFilter}</strong>
-                        <button
-                            onClick={() => setProductFilter("all")}
-                            style={{ marginLeft: 6, fontSize: 11, color: "#6b7280", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
-                        >
-                            clear
-                        </button>
-                    </span>
-                )}
-            </div>
+            {/* Main Table Card */}
+            <Card className="border-[#222226] bg-[#111113] shadow-lg">
+                <CardHeader className="pb-3 border-b border-[#1E1E22]">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <CardTitle className="text-sm font-semibold text-white font-display">
+                            Guest Item History ({filtered.length})
+                        </CardTitle>
 
-            {/* Error */}
-            {error && (
-                <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", color: "#dc2626", fontSize: 13, marginBottom: 16 }}>
-                    ⚠️ {error}
-                </div>
-            )}
+                        <div className="flex flex-wrap items-center gap-2">
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#71717A]" />
+                                <Input
+                                    placeholder="Search by name, email, phone…"
+                                    value={search}
+                                    onChange={(e) => handleSearch(e.target.value)}
+                                    className="h-8 w-56 pl-8 border-[#27272A] bg-[#141417] text-xs text-white"
+                                />
+                            </div>
 
-            {/* Table */}
-            <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                        <tr style={{ borderBottom: "1px solid #f3f4f6", background: "#f9fafb" }}>
-                            {["Customer", "Items Purchased", "CRM Status", "Spend", "Last Visit"].map((h) => (
-                                <th
-                                    key={h}
-                                    style={{
-                                        padding: "10px 16px",
-                                        textAlign: h === "Spend" || h === "Last Visit" ? "right" : "left",
-                                        fontSize: 11,
-                                        fontWeight: 700,
-                                        color: "#6b7280",
-                                        textTransform: "uppercase",
-                                        letterSpacing: "0.06em",
-                                    }}
+                            {allProducts.length > 0 && (
+                                <Select
+                                    value={productFilter}
+                                    onValueChange={(v) => setProductFilter(v)}
                                 >
-                                    {h}
-                                </th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading && (
-                            <tr>
-                                <td colSpan={5} style={{ padding: "40px 16px", textAlign: "center", color: "#9ca3af", fontSize: 14 }}>
-                                    Loading customer purchases…
-                                </td>
-                            </tr>
-                        )}
-                        {!loading && filtered.length === 0 && (
-                            <tr>
-                                <td colSpan={5} style={{ padding: "40px 16px", textAlign: "center", color: "#9ca3af", fontSize: 14 }}>
-                                    {productFilter !== "all" ? `No customers purchased "${productFilter}"` : "No customers found."}
-                                </td>
-                            </tr>
-                        )}
-                        {!loading && filtered.map((row) => {
-                            const initials = row.customerName.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-                            return (
-                                <tr
-                                    key={row.cloverCustomerId}
-                                    style={{ borderBottom: "1px solid #f3f4f6" }}
-                                    onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#f9fafb")}
-                                    onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}
-                                >
-                                    <td style={{ padding: "12px 16px", verticalAlign: "top" }}>
-                                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                                            <div style={{
-                                                width: 32, height: 32, borderRadius: "50%",
-                                                background: "linear-gradient(135deg, #8b5cf6, #06b6d4)",
-                                                display: "flex", alignItems: "center", justifyContent: "center",
-                                                fontSize: 12, fontWeight: 700, color: "#fff", flexShrink: 0,
-                                            }}>
-                                                {initials || "?"}
-                                            </div>
-                                            <div>
-                                                <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{row.customerName}</div>
-                                                {row.email && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 1 }}>{row.email}</div>}
-                                                {row.phone && <div style={{ fontSize: 11, color: "#9ca3af" }}>{row.phone}</div>}
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td style={{ padding: "12px 16px", verticalAlign: "top" }}>
-                                        <ItemChips items={row.itemsPurchased} />
-                                    </td>
-                                    <td style={{ padding: "12px 16px", verticalAlign: "top" }}>
-                                        <MatchBadge status={row.matchStatus} />
-                                        {row.matchMethod && (
-                                            <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 3 }}>
-                                                via {row.matchMethod.replace("_", " ")}
-                                            </div>
-                                        )}
-                                    </td>
-                                    <td style={{ padding: "12px 16px", verticalAlign: "top", textAlign: "right" }}>
-                                        <div style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>{formatMoney(row.totalSpendCents)}</div>
-                                        <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>{row.orderCount} order{row.orderCount !== 1 ? "s" : ""}</div>
-                                    </td>
-                                    <td style={{ padding: "12px 16px", verticalAlign: "top", textAlign: "right" }}>
-                                        <div style={{ fontSize: 12, color: "#6b7280" }}>{formatDate(row.lastVisitMs)}</div>
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
-
-                {/* Pagination */}
-                {totalPages > 1 && (
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", borderTop: "1px solid #f3f4f6", fontSize: 12, color: "#6b7280" }}>
-                        <span>Page {page + 1} of {totalPages} · {total} customers total</span>
-                        <div style={{ display: "flex", gap: 6 }}>
-                            {[{ label: "← Prev", p: page - 1, dis: page === 0 }, { label: "Next →", p: page + 1, dis: page >= totalPages - 1 }].map((btn) => (
-                                <button
-                                    key={btn.label}
-                                    onClick={() => handlePage(btn.p)}
-                                    disabled={btn.dis || loading}
-                                    style={{
-                                        background: btn.dis ? "#f9fafb" : "#fff",
-                                        border: "1px solid #e5e7eb",
-                                        borderRadius: 6,
-                                        padding: "5px 12px",
-                                        fontSize: 12,
-                                        color: btn.dis ? "#d1d5db" : "#374151",
-                                        cursor: btn.dis ? "not-allowed" : "pointer",
-                                    }}
-                                >
-                                    {btn.label}
-                                </button>
-                            ))}
+                                    <SelectTrigger className="h-8 w-[160px] border-[#27272A] bg-[#141417] text-xs text-white">
+                                        <SelectValue placeholder="Filter Product" />
+                                    </SelectTrigger>
+                                    <SelectContent className="border-[#27272A] bg-[#141417] text-white">
+                                        <SelectItem value="all">All Products</SelectItem>
+                                        {allProducts.slice(0, 20).map((p) => (
+                                            <SelectItem key={p} value={p}>
+                                                {p}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            )}
                         </div>
                     </div>
-                )}
-            </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                    {loading ? (
+                        <TableSkeleton rows={7} columns={7} />
+                    ) : filtered.length === 0 ? (
+                        <div className="p-8 text-center">
+                            <EmptyState
+                                title="No records found"
+                                description="Try adjusting your product filter or search term."
+                            />
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs">
+                                <thead>
+                                    <tr className="border-b border-[#1E1E22] bg-[#0E0E10] text-[#71717A]">
+                                        <th className="py-3 px-4 font-medium">Customer</th>
+                                        <th className="py-3 px-4 font-medium">Items Purchased</th>
+                                        <th className="py-3 px-4 font-medium">CRM Status</th>
+                                        <th className="py-3 px-4 text-right font-medium">Total Spend</th>
+                                        <th className="py-3 px-4 text-right font-medium">Last Visit</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-[#1A1A1E]">
+                                    {filtered.map((row) => {
+                                        const initials = row.customerName
+                                            .split(" ")
+                                            .filter(Boolean)
+                                            .slice(0, 2)
+                                            .map((w) => w[0])
+                                            .join("")
+                                            .toUpperCase();
+                                        return (
+                                            <tr
+                                                key={row.cloverCustomerId}
+                                                className="hover:bg-[#161619] transition-colors"
+                                            >
+                                                <td className="py-3 px-4 align-top">
+                                                    <div className="flex items-center gap-2.5">
+                                                        <div className="h-8 w-8 rounded-full bg-[#1F1F24] border border-[#27272A] flex items-center justify-center text-xs font-bold text-white shrink-0">
+                                                            {initials || "?"}
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-semibold text-white">
+                                                                {row.customerName}
+                                                            </div>
+                                                            {row.email && (
+                                                                <div className="text-[11px] text-[#A1A1AA]">
+                                                                    {row.email}
+                                                                </div>
+                                                            )}
+                                                            {row.phone && (
+                                                                <div className="text-[10px] text-[#71717A]">
+                                                                    {row.phone}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="py-3 px-4 align-top">
+                                                    <ItemChips items={row.itemsPurchased} />
+                                                </td>
+                                                <td className="py-3 px-4 align-top">
+                                                    <MatchBadge status={row.matchStatus} />
+                                                    {row.matchMethod && (
+                                                        <div className="text-[10px] text-[#71717A] mt-1">
+                                                            via {row.matchMethod.replace("_", " ")}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td className="py-3 px-4 align-top text-right font-mono">
+                                                    <div className="font-bold text-white">
+                                                        {money(row.totalSpendCents)}
+                                                    </div>
+                                                    <div className="text-[10px] text-[#71717A]">
+                                                        {row.orderCount} orders
+                                                    </div>
+                                                </td>
+                                                <td className="py-3 px-4 align-top text-right text-[#A1A1AA]">
+                                                    {row.lastVisitMs
+                                                        ? relativeTime(row.lastVisitMs)
+                                                        : "—"}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-t border-[#1E1E22] px-4 py-3 bg-[#0E0E10]">
+                            <span className="text-xs text-[#71717A]">
+                                Page {page + 1} of {totalPages} · {total} guests
+                            </span>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={page === 0 || loading}
+                                    onClick={() => handlePage(page - 1)}
+                                    className="h-8 border-[#27272A] bg-[#141417] text-xs text-[#E4E4E7]"
+                                >
+                                    <ChevronLeft className="h-3.5 w-3.5 mr-1" /> Prev
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={page >= totalPages - 1 || loading}
+                                    onClick={() => handlePage(page + 1)}
+                                    className="h-8 border-[#27272A] bg-[#141417] text-xs text-[#E4E4E7]"
+                                >
+                                    Next <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
         </div>
     );
 }

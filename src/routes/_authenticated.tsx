@@ -5,22 +5,13 @@ import { SyncProvider } from "@/hooks/use-sync-context";
 import { useSilentAutoSync } from "@/hooks/use-silent-auto-sync";
 import { useEffect, useState } from "react";
 
+import type { AdminSession } from "@/lib/integration/types";
+
 async function logoutRequest() {
     await fetch("/api/auth/logout", { method: "POST" });
 }
 
-/**
- * Read the session via the raw /api/auth/me route.
- *
- * This route handler receives the actual HTTP Request object with the Cookie
- * header intact, so it can validate the Supabase session reliably. On the
- * CLIENT this fetch sends the browser cookie with credentials:"include".
- *
- * On the SERVER (SSR) this internal fetch does NOT forward the browser's
- * Cookie header, so it returns null — which is why beforeLoad must NOT
- * redirect during SSR (see below).
- */
-async function readSessionFromMeRoute(): Promise<{ userId: string; email: string } | null> {
+async function readSessionFromMeRoute(): Promise<AdminSession> {
     try {
         const res = await fetch("/api/auth/me", {
             headers: { accept: "application/json" },
@@ -39,7 +30,7 @@ const isServer = typeof window === "undefined";
 
 export const Route = createFileRoute("/_authenticated")({
     beforeLoad: async ({ location }) => {
-        let session: { userId: string; email: string } | null = null;
+        let session: AdminSession = null;
         let setupRequired = false;
 
         // Try the adminMe server function first (reads cookie via request context
@@ -64,12 +55,6 @@ export const Route = createFileRoute("/_authenticated")({
             return { session: null, setupRequired: true };
         }
 
-        // CRITICAL: during SSR the browser's Cookie header is NOT forwarded to
-        // internal fetches / server-function request context in this runtime, so
-        // session is null even when the user is authenticated. Redirecting here
-        // would bounce authenticated users back to /login on every full page
-        // load. Instead, during SSR we render a loading shell and let the
-        // component re-check auth on the client (where the cookie IS sent).
         if (isServer) {
             return { session: null, setupRequired: false, ssrPending: true };
         }
@@ -89,10 +74,7 @@ export const Route = createFileRoute("/_authenticated")({
 function AuthLayout() {
     const ctx = Route.useRouteContext();
     const router = useRouter();
-    const [clientSession, setClientSession] = useState<{
-        userId: string;
-        email: string;
-    } | null>(ctx.session ?? null);
+    const [clientSession, setClientSession] = useState<AdminSession>(ctx.session ?? null);
     const [checking, setChecking] = useState<boolean>(ctx.ssrPending ?? false);
 
     useEffect(() => {
@@ -138,6 +120,7 @@ function AuthLayout() {
             <AutoSyncBridge />
             <AdminShell
                 email={clientSession?.email ?? null}
+                session={clientSession}
                 onLogout={async () => {
                     await logoutRequest();
                     await router.invalidate();

@@ -19,8 +19,16 @@ import {
     Users,
     AlertTriangle,
     CheckCircle2,
+    Phone,
+    Mail,
+    RefreshCw,
+    ShieldCheck,
+    Layers,
+    Sparkles,
+    Check,
 } from "lucide-react";
 import { PageHeader, EmptyState } from "@/components/page-header";
+import { TableSkeleton, MetricCardsSkeleton } from "@/components/ui/table-skeleton";
 import {
     findItemCustomers,
     tagItemCustomers,
@@ -30,7 +38,7 @@ import {
     getSyncedContactsFn,
 } from "@/lib/integration/integration.functions";
 import { useServerFn } from "@tanstack/react-start";
-import { useSyncVersion } from "@/hooks/use-sync-context";
+import { useSyncVersion, useSyncContext } from "@/hooks/use-sync-context";
 import { money, formatDateTime } from "@/lib/integration/format";
 import type {
     ItemSearchResult,
@@ -39,43 +47,10 @@ import type {
 
 type Range = "today" | "week" | "month" | "all";
 
-// CRM contact detail URL. The locationId is the configured sub-account.
 const CRM_LOCATION_ID = "7biYjalPZzmmvKaLw0WN";
 function crmContactUrl(contactId: string) {
     return `https://app.gohighlevel.com/sub-account/${CRM_LOCATION_ID}/contacts/${contactId}`;
 }
-
-const STATUS_COLORS: Record<string, string> = {
-    MAPPED: "default",
-    MATCHED: "default",
-    CONTACT_CREATED: "secondary",
-    TAG_APPLIED: "default",
-    ALREADY_TAGGED: "secondary",
-    NO_CUSTOMER: "outline",
-    NO_MATCH: "outline",
-    NO_GHL_MATCH: "outline",
-    NO_IDENTIFIERS: "outline",
-    CONTACT_MATCH_CONFLICT: "destructive",
-    CONFLICT: "destructive",
-    MAPPING_FAILED: "destructive",
-    SKIPPED_REFUNDED: "outline",
-    UNMATCHED: "outline",
-    NEEDS_REVIEW: "secondary",
-    AMBIGUOUS_MATCH: "secondary",
-};
-
-const SYNC_COLORS: Record<string, string> = {
-    SYNCED: "default",
-    PROCESSED: "secondary",
-    PENDING: "outline",
-    NO_CUSTOMER: "outline",
-    NO_GHL_MATCH: "outline",
-    NEEDS_REVIEW: "secondary",
-    CONFLICT: "destructive",
-    PARTIAL: "secondary",
-    VOIDED: "outline",
-    NOT_PAID: "outline",
-};
 
 export function PurchaseMappingPage() {
     const findFn = useServerFn(findItemCustomers);
@@ -85,6 +60,7 @@ export function PurchaseMappingPage() {
     const reviewFn = useServerFn(getReviewQueueFn);
     const syncedFn = useServerFn(getSyncedContactsFn);
     const syncVersion = useSyncVersion();
+    const { bump } = useSyncContext();
 
     const [search, setSearch] = useState("");
     const [range, setRange] = useState<Range>("all");
@@ -116,8 +92,8 @@ export function PurchaseMappingPage() {
             setReviewRows((r as any)?.rows ?? []);
             setSyncedRows((sc as any)?.contacts ?? []);
             setSyncedTotal((sc as any)?.total ?? 0);
-        } catch {
-            /* ignore */
+        } catch (e) {
+            console.error("Monitor load error:", e);
         } finally {
             setMonitorLoading(false);
         }
@@ -159,162 +135,232 @@ export function PurchaseMappingPage() {
             setTagSummary(res as any);
             await search_();
             await loadMonitor();
+            bump();
         } catch (e: any) {
             setError(e?.message ?? String(e));
         } finally {
             setTagging(false);
         }
-    }, [tagFn, search, range, search_, loadMonitor]);
+    }, [tagFn, search, range, search_, loadMonitor, bump]);
 
     return (
-        <div>
+        <div className="space-y-6">
             <PageHeader
                 title="Purchase Mapping"
-                description="Monitor Clover → CRM contact matching and purchase tags. Search 'Who bought Wings?' to apply tags."
+                description="Identity reconciliation monitor and CRM purchase tag automation workspace."
+                actions={
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                            bump();
+                            loadMonitor();
+                        }}
+                        disabled={monitorLoading}
+                        className="border-[#27272A] bg-[#141417] text-xs hover:bg-[#1E1E24]"
+                    >
+                        <RefreshCw
+                            className={`mr-2 h-3.5 w-3.5 text-zinc-400 ${monitorLoading ? "animate-spin" : ""}`}
+                        />
+                        Refresh Monitor
+                    </Button>
+                }
             />
 
-            <Tabs defaultValue="overview">
-                <TabsList>
-                    <TabsTrigger value="overview">Overview</TabsTrigger>
-                    <TabsTrigger value="synced">Synced ({syncedTotal})</TabsTrigger>
-                    <TabsTrigger value="review">Review Queue</TabsTrigger>
-                    <TabsTrigger value="search">Item Search</TabsTrigger>
+            <Tabs defaultValue="overview" className="space-y-4">
+                <TabsList className="bg-[#141417] border border-[#222226] p-1 h-10 rounded-xl">
+                    <TabsTrigger
+                        value="overview"
+                        className="text-xs data-[state=active]:bg-[#202025] data-[state=active]:text-white"
+                    >
+                        Mapping Monitor
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="synced"
+                        className="text-xs data-[state=active]:bg-[#202025] data-[state=active]:text-white"
+                    >
+                        Synced CRM Contacts ({syncedTotal})
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="review"
+                        className="text-xs data-[state=active]:bg-[#202025] data-[state=active]:text-white"
+                    >
+                        Review Queue ({reviewRows.length})
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="search"
+                        className="text-xs data-[state=active]:bg-[#202025] data-[state=active]:text-white"
+                    >
+                        Item Tagging Engine
+                    </TabsTrigger>
                 </TabsList>
 
-                {/* ---- OVERVIEW ---- */}
-                <TabsContent value="overview">
+                {/* ---- 1. MONITOR OVERVIEW ---- */}
+                <TabsContent value="overview" className="space-y-6">
                     {monitorLoading ? (
-                        <div className="flex items-center gap-2 py-12 text-sm text-muted-foreground">
-                            <Loader2 className="h-4 w-4 animate-spin" /> Loading mapping monitor…
+                        <div className="space-y-6">
+                            <MetricCardsSkeleton count={4} />
+                            <Card className="border-[#222226] bg-[#111113] shadow-lg">
+                                <CardHeader className="pb-3 border-b border-[#1E1E22]">
+                                    <div className="h-4 w-48 bg-zinc-800 rounded animate-pulse" />
+                                </CardHeader>
+                                <CardContent className="p-0">
+                                    <TableSkeleton rowCount={8} columnCount={8} />
+                                </CardContent>
+                            </Card>
                         </div>
                     ) : stats ? (
                         <>
-                            <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                                <StatCard
-                                    label="Clover Customers"
-                                    value={stats.totalCloverCustomers}
-                                    icon={<Users className="h-4 w-4" />}
-                                />
-                                <StatCard
-                                    label="With Purchases"
-                                    value={stats.customersWithPurchases}
-                                    icon={<Users className="h-4 w-4" />}
-                                />
-                                <StatCard
-                                    label="Matched CRM"
-                                    value={stats.matchedGhlContacts}
-                                    icon={<CheckCircle2 className="h-4 w-4" />}
-                                />
-                                <StatCard
-                                    label="Verified Mappings"
-                                    value={stats.verifiedMappings}
-                                    icon={<CheckCircle2 className="h-4 w-4" />}
-                                />
-                                <StatCard
-                                    label="Unmatched"
-                                    value={stats.unmatchedCustomers}
-                                    icon={<AlertTriangle className="h-4 w-4" />}
-                                />
-                                <StatCard
-                                    label="Needs Review"
-                                    value={stats.needsReview}
-                                    icon={<AlertTriangle className="h-4 w-4" />}
-                                />
-                                <StatCard
-                                    label="Conflicts"
-                                    value={stats.conflicts}
-                                    icon={<AlertTriangle className="h-4 w-4" />}
-                                />
-                                <StatCard
-                                    label="Tags Applied"
-                                    value={stats.tagsApplied}
-                                    icon={<Tag className="h-4 w-4" />}
-                                />
-                                <StatCard
-                                    label="Tags Verified"
-                                    value={stats.tagsVerified}
-                                    icon={<CheckCircle2 className="h-4 w-4" />}
-                                />
-                                <StatCard
-                                    label="Tags Failed"
-                                    value={stats.tagsFailed}
-                                    icon={<AlertTriangle className="h-4 w-4" />}
-                                />
-                                <StatCard
-                                    label="Out of Sync"
-                                    value={stats.outOfSync}
-                                    icon={<AlertTriangle className="h-4 w-4" />}
-                                />
+                            {/* Summary Metrics Grid */}
+                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                                <Card className="border-[#222226] bg-[#111113]">
+                                    <CardContent className="p-4">
+                                        <div className="flex items-center justify-between text-xs text-[#A1A1AA]">
+                                            <span>Matched CRM Contacts</span>
+                                            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                                        </div>
+                                        <div className="mt-2 text-2xl font-bold font-mono text-emerald-400">
+                                            {stats.matchedGhlContacts?.toLocaleString() ?? 0}
+                                        </div>
+                                        <div className="mt-1 text-[11px] text-[#71717A]">
+                                            {stats.verifiedMappings ?? 0} verified mappings
+                                        </div>
+                                    </CardContent>
+                                </Card>
+
+                                <Card className="border-[#222226] bg-[#111113]">
+                                    <CardContent className="p-4">
+                                        <div className="flex items-center justify-between text-xs text-[#A1A1AA]">
+                                            <span>Tags Applied & Verified</span>
+                                            <Tag className="h-4 w-4 text-blue-400" />
+                                        </div>
+                                        <div className="mt-2 text-2xl font-bold font-mono text-blue-400">
+                                            {stats.tagsVerified?.toLocaleString() ?? 0}
+                                        </div>
+                                        <div className="mt-1 text-[11px] text-[#71717A]">
+                                            {stats.tagsApplied ?? 0} dispatched to GHL
+                                        </div>
+                                    </CardContent>
+                                </Card>
+
+                                <Card className="border-[#222226] bg-[#111113]">
+                                    <CardContent className="p-4">
+                                        <div className="flex items-center justify-between text-xs text-[#A1A1AA]">
+                                            <span>Review Queue</span>
+                                            <AlertTriangle className="h-4 w-4 text-amber-400" />
+                                        </div>
+                                        <div className="mt-2 text-2xl font-bold font-mono text-amber-400">
+                                            {stats.needsReview?.toLocaleString() ?? 0}
+                                        </div>
+                                        <div className="mt-1 text-[11px] text-[#71717A]">
+                                            {stats.conflicts ?? 0} identifier conflicts
+                                        </div>
+                                    </CardContent>
+                                </Card>
+
+                                <Card className="border-[#222226] bg-[#111113]">
+                                    <CardContent className="p-4">
+                                        <div className="flex items-center justify-between text-xs text-[#A1A1AA]">
+                                            <span>Unmatched Guests</span>
+                                            <Users className="h-4 w-4 text-zinc-400" />
+                                        </div>
+                                        <div className="mt-2 text-2xl font-bold font-mono text-white">
+                                            {stats.unmatchedCustomers?.toLocaleString() ?? 0}
+                                        </div>
+                                        <div className="mt-1 text-[11px] text-[#71717A]">
+                                            Awaiting phone / email capture
+                                        </div>
+                                    </CardContent>
+                                </Card>
                             </div>
 
-                            <Card>
-                                <CardHeader className="pb-3">
-                                    <CardTitle className="text-base">
-                                        Customer Mapping Table ({tableRows.length})
-                                    </CardTitle>
+                            {/* Customer Mapping Table */}
+                            <Card className="border-[#222226] bg-[#111113] shadow-lg">
+                                <CardHeader className="pb-3 border-b border-[#1E1E22]">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <CardTitle className="text-sm font-semibold text-white font-display">
+                                                Identity Mapping Registry ({tableRows.length})
+                                            </CardTitle>
+                                        </div>
+                                        <span className="text-xs text-[#71717A]">
+                                            Phone, Email & Cached Verification
+                                        </span>
+                                    </div>
                                 </CardHeader>
-                                <CardContent>
+                                <CardContent className="p-0">
                                     {tableRows.length === 0 ? (
-                                        <EmptyState
-                                            title="No customers mapped yet"
-                                            description="Run 'Sync Clover Data' in Settings to process purchases and match CRM contacts."
-                                        />
+                                        <div className="p-8 text-center text-xs text-[#71717A]">
+                                            No mappings generated yet.
+                                        </div>
                                     ) : (
                                         <div className="overflow-x-auto">
-                                            <table className="w-full text-sm">
+                                            <table className="w-full text-left text-xs">
                                                 <thead>
-                                                    <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                                                        <th className="pb-2 pr-4 font-medium">Customer</th>
-                                                        <th className="pb-2 pr-4 font-medium">Email / Phone</th>
-                                                        <th className="pb-2 pr-4 font-medium">Purchases</th>
-                                                        <th className="pb-2 pr-4 font-medium">CRM Contact</th>
-                                                        <th className="pb-2 pr-4 font-medium">Match Method</th>
-                                                        <th className="pb-2 pr-4 font-medium">Match Status</th>
-                                                        <th className="pb-2 pr-4 font-medium">Tags</th>
-                                                        <th className="pb-2 font-medium">Sync</th>
+                                                    <tr className="border-b border-[#1E1E22] bg-[#0E0E10] text-[#71717A]">
+                                                        <th className="py-3 px-4 font-medium">Customer Profile</th>
+                                                        <th className="py-3 px-4 font-medium">Phone / Email</th>
+                                                        <th className="py-3 px-4 font-medium">Purchases</th>
+                                                        <th className="py-3 px-4 font-medium">Matched GHL Contact</th>
+                                                        <th className="py-3 px-4 font-medium">Match Method</th>
+                                                        <th className="py-3 px-4 font-medium">Match Status</th>
+                                                        <th className="py-3 px-4 font-medium">Tags</th>
+                                                        <th className="py-3 px-4 font-medium">Sync State</th>
                                                     </tr>
                                                 </thead>
-                                                <tbody>
+                                                <tbody className="divide-y divide-[#1A1A1E]">
                                                     {tableRows.map((c, i) => (
-                                                        <tr key={i} className="border-b border-border/50">
-                                                            <td className="py-2.5 pr-4 font-medium text-foreground">
+                                                        <tr key={i} className="hover:bg-[#161619] transition-colors">
+                                                            <td className="py-3 px-4 font-medium text-white">
                                                                 {c.customerName}
                                                             </td>
-                                                            <td className="py-2.5 pr-4 text-xs text-muted-foreground">
+                                                            <td className="py-3 px-4 text-[#A1A1AA] font-mono text-[11px]">
                                                                 {c.email || c.phone || "—"}
                                                             </td>
-                                                            <td className="py-2.5 pr-4">{c.purchaseCount}</td>
-                                                            <td className="py-2.5 pr-4">
+                                                            <td className="py-3 px-4 font-mono font-medium text-white">
+                                                                {c.purchaseCount}
+                                                            </td>
+                                                            <td className="py-3 px-4 font-mono text-[11px]">
                                                                 {c.ghlContactId ? (
                                                                     <a
                                                                         href={crmContactUrl(c.ghlContactId)}
                                                                         target="_blank"
                                                                         rel="noopener noreferrer"
-                                                                        className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                                                                        className="text-blue-400 hover:underline inline-flex items-center gap-1"
                                                                     >
                                                                         {c.ghlContactId.slice(0, 8)}…
-                                                                        <ExternalLink className="h-3 w-3" />
+                                                                        <ExternalLink className="h-2.5 w-2.5" />
                                                                     </a>
                                                                 ) : (
-                                                                    <span className="text-xs text-muted-foreground">—</span>
+                                                                    <span className="text-[#52525B]">—</span>
                                                                 )}
                                                             </td>
-                                                            <td className="py-2.5 pr-4 text-xs text-muted-foreground">
-                                                                {c.matchMethod ?? "—"}
+                                                            <td className="py-3 px-4">
+                                                                <MatchMethodBadge method={c.matchMethod} />
                                                             </td>
-                                                            <td className="py-2.5 pr-4">
+                                                            <td className="py-3 px-4">
                                                                 <Badge
-                                                                    variant={(STATUS_COLORS[c.matchStatus] as any) ?? "outline"}
-                                                                    className="text-[10px]"
+                                                                    variant="outline"
+                                                                    className={
+                                                                        c.matchStatus === "MATCHED" || c.matchStatus === "MAPPED"
+                                                                            ? "border-emerald-800/40 bg-emerald-950/40 text-emerald-400 text-[10px]"
+                                                                            : "border-zinc-800 bg-zinc-900 text-zinc-400 text-[10px]"
+                                                                    }
                                                                 >
                                                                     {c.matchStatus}
                                                                 </Badge>
                                                             </td>
-                                                            <td className="py-2.5 pr-4">{c.tagCount}</td>
-                                                            <td className="py-2.5 pr-4">
+                                                            <td className="py-3 px-4 font-mono text-zinc-300">
+                                                                {c.tagCount}
+                                                            </td>
+                                                            <td className="py-3 px-4">
                                                                 <Badge
-                                                                    variant={(SYNC_COLORS[c.syncStatus] as any) ?? "outline"}
-                                                                    className="text-[10px]"
+                                                                    variant="outline"
+                                                                    className={
+                                                                        c.syncStatus === "SYNCED"
+                                                                            ? "border-emerald-800/40 bg-emerald-950/40 text-emerald-400 text-[10px]"
+                                                                            : "border-zinc-800 bg-zinc-900 text-zinc-400 text-[10px]"
+                                                                    }
                                                                 >
                                                                     {c.syncStatus}
                                                                 </Badge>
@@ -328,77 +374,81 @@ export function PurchaseMappingPage() {
                                 </CardContent>
                             </Card>
                         </>
-                    ) : (
-                        <EmptyState
-                            title="No monitor data"
-                            description="Run 'Sync Clover Data' in Settings to populate mapping data."
-                        />
-                    )}
+                    ) : null}
                 </TabsContent>
 
-                {/* ---- SYNCED CONTACTS ---- */}
+                {/* ---- 2. SYNCED CRM CONTACTS ---- */}
                 <TabsContent value="synced">
-                    <Card>
-                        <CardHeader className="pb-3">
-                            <CardTitle className="flex items-center gap-2 text-base">
-                                <CheckCircle2 className="h-4 w-4" /> Synced Contacts ({syncedTotal})
+                    <Card className="border-[#222226] bg-[#111113] shadow-lg">
+                        <CardHeader className="pb-3 border-b border-[#1E1E22]">
+                            <CardTitle className="text-sm font-semibold text-white font-display flex items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                                Verified & Synced Contacts ({syncedTotal})
                             </CardTitle>
                         </CardHeader>
-                        <CardContent>
-                            {syncedRows.length === 0 ? (
-                                <EmptyState
-                                    title="No synced contacts yet"
-                                    description="Confidently matched CRM contacts with applied purchase tags will appear here after you run 'Process Customer Mappings & Tags' in Settings."
-                                />
+                        <CardContent className="p-0">
+                            {monitorLoading ? (
+                                <TableSkeleton rowCount={8} columnCount={7} />
+                            ) : syncedRows.length === 0 ? (
+                                <div className="p-8 text-center text-xs text-[#71717A]">
+                                    No contacts synced to CRM yet.
+                                </div>
                             ) : (
                                 <div className="overflow-x-auto">
-                                    <table className="w-full text-sm">
+                                    <table className="w-full text-left text-xs">
                                         <thead>
-                                            <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                                                <th className="pb-2 pr-4 font-medium">Customer</th>
-                                                <th className="pb-2 pr-4 font-medium">Email / Phone</th>
-                                                <th className="pb-2 pr-4 font-medium">CRM Contact</th>
-                                                <th className="pb-2 pr-4 font-medium">Match Method</th>
-                                                <th className="pb-2 pr-4 font-medium">Tags Applied</th>
-                                                <th className="pb-2 pr-4 font-medium">Tags Verified</th>
-                                                <th className="pb-2 font-medium">Verified At</th>
+                                            <tr className="border-b border-[#1E1E22] bg-[#0E0E10] text-[#71717A]">
+                                                <th className="py-3 px-4 font-medium">Customer Name</th>
+                                                <th className="py-3 px-4 font-medium">Identifier</th>
+                                                <th className="py-3 px-4 font-medium">GHL Contact ID</th>
+                                                <th className="py-3 px-4 font-medium">Match Method</th>
+                                                <th className="py-3 px-4 font-medium">Tags Applied</th>
+                                                <th className="py-3 px-4 font-medium">Verified Tags</th>
+                                                <th className="py-3 px-4 font-medium">Verification Date</th>
                                             </tr>
                                         </thead>
-                                        <tbody>
+                                        <tbody className="divide-y divide-[#1A1A1E]">
                                             {syncedRows.map((c, i) => (
-                                                <tr key={i} className="border-b border-border/50">
-                                                    <td className="py-2.5 pr-4 font-medium text-foreground">
+                                                <tr key={i} className="hover:bg-[#161619] transition-colors">
+                                                    <td className="py-3 px-4 font-medium text-white">
                                                         {c.customerName}
                                                     </td>
-                                                    <td className="py-2.5 pr-4 text-xs text-muted-foreground">
+                                                    <td className="py-3 px-4 text-[#A1A1AA] font-mono text-[11px]">
                                                         {c.email || c.phone || "—"}
                                                     </td>
-                                                    <td className="py-2.5 pr-4">
+                                                    <td className="py-3 px-4 font-mono text-[11px]">
                                                         <a
                                                             href={crmContactUrl(c.ghlContactId)}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                                                            className="text-blue-400 hover:underline inline-flex items-center gap-1"
                                                         >
-                                                            {c.ghlContactId.slice(0, 8)}…
-                                                            <ExternalLink className="h-3 w-3" />
+                                                            {c.ghlContactId}
+                                                            <ExternalLink className="h-2.5 w-2.5" />
                                                         </a>
                                                     </td>
-                                                    <td className="py-2.5 pr-4 text-xs text-muted-foreground">
-                                                        {c.matchMethod}
+                                                    <td className="py-3 px-4">
+                                                        <MatchMethodBadge method={c.matchMethod} />
                                                     </td>
-                                                    <td className="py-2.5 pr-4">{c.tagsApplied}</td>
-                                                    <td className="py-2.5 pr-4">
+                                                    <td className="py-3 px-4 font-mono text-zinc-300">
+                                                        {c.tagsApplied}
+                                                    </td>
+                                                    <td className="py-3 px-4">
                                                         {c.tagsVerified > 0 ? (
-                                                            <Badge variant="default" className="text-[10px]">
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="border-emerald-800/40 bg-emerald-950/40 text-emerald-400 text-[10px]"
+                                                            >
                                                                 {c.tagsVerified} verified
                                                             </Badge>
                                                         ) : (
-                                                            <span className="text-xs text-muted-foreground">—</span>
+                                                            <span className="text-[#52525B]">—</span>
                                                         )}
                                                     </td>
-                                                    <td className="py-2.5 pr-4 text-xs text-muted-foreground">
-                                                        {c.verifiedAt ? formatDateTime(new Date(c.verifiedAt).getTime()) : "—"}
+                                                    <td className="py-3 px-4 text-[#71717A]">
+                                                        {c.verifiedAt
+                                                            ? formatDateTime(new Date(c.verifiedAt).getTime())
+                                                            : "—"}
                                                     </td>
                                                 </tr>
                                             ))}
@@ -410,49 +460,54 @@ export function PurchaseMappingPage() {
                     </Card>
                 </TabsContent>
 
-                {/* ---- REVIEW QUEUE ---- */}
+                {/* ---- 3. REVIEW QUEUE ---- */}
                 <TabsContent value="review">
-                    <Card>
-                        <CardHeader className="pb-3">
-                            <CardTitle className="flex items-center gap-2 text-base">
-                                <AlertTriangle className="h-4 w-4" /> Needs Review ({reviewRows.length})
+                    <Card className="border-[#222226] bg-[#111113] shadow-lg">
+                        <CardHeader className="pb-3 border-b border-[#1E1E22]">
+                            <CardTitle className="text-sm font-semibold text-white font-display flex items-center gap-2">
+                                <AlertTriangle className="h-4 w-4 text-amber-400" />
+                                Ambiguous Matches & Conflict Review ({reviewRows.length})
                             </CardTitle>
                         </CardHeader>
-                        <CardContent>
-                            {reviewRows.length === 0 ? (
-                                <EmptyState
-                                    title="No items need review"
-                                    description="Name-only matches, ambiguous identifiers, and conflicts will appear here."
-                                />
+                        <CardContent className="p-0">
+                            {monitorLoading ? (
+                                <TableSkeleton rowCount={6} columnCount={4} />
+                            ) : reviewRows.length === 0 ? (
+                                <div className="p-8 text-center text-xs text-emerald-400">
+                                    <CheckCircle2 className="h-6 w-6 mx-auto mb-2 text-emerald-400" />
+                                    Zero conflicts or ambiguous records pending review.
+                                </div>
                             ) : (
                                 <div className="overflow-x-auto">
-                                    <table className="w-full text-sm">
+                                    <table className="w-full text-left text-xs">
                                         <thead>
-                                            <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                                                <th className="pb-2 pr-4 font-medium">Customer</th>
-                                                <th className="pb-2 pr-4 font-medium">Email / Phone</th>
-                                                <th className="pb-2 pr-4 font-medium">Status</th>
-                                                <th className="pb-2 font-medium">Reason</th>
+                                            <tr className="border-b border-[#1E1E22] bg-[#0E0E10] text-[#71717A]">
+                                                <th className="py-3 px-4 font-medium">Customer Name</th>
+                                                <th className="py-3 px-4 font-medium">Email / Phone</th>
+                                                <th className="py-3 px-4 font-medium">Status Flag</th>
+                                                <th className="py-3 px-4 font-medium">Audit Rationale</th>
                                             </tr>
                                         </thead>
-                                        <tbody>
+                                        <tbody className="divide-y divide-[#1A1A1E]">
                                             {reviewRows.map((r, i) => (
-                                                <tr key={i} className="border-b border-border/50">
-                                                    <td className="py-2.5 pr-4 font-medium text-foreground">
+                                                <tr key={i} className="hover:bg-[#161619] transition-colors">
+                                                    <td className="py-3 px-4 font-medium text-white">
                                                         {r.customerName}
                                                     </td>
-                                                    <td className="py-2.5 pr-4 text-xs text-muted-foreground">
+                                                    <td className="py-3 px-4 text-[#A1A1AA] font-mono text-[11px]">
                                                         {r.email || r.phone || "—"}
                                                     </td>
-                                                    <td className="py-2.5 pr-4">
+                                                    <td className="py-3 px-4">
                                                         <Badge
-                                                            variant={(STATUS_COLORS[r.matchStatus] as any) ?? "outline"}
-                                                            className="text-[10px]"
+                                                            variant="outline"
+                                                            className="border-amber-800/40 bg-amber-950/40 text-amber-400 text-[10px]"
                                                         >
                                                             {r.matchStatus}
                                                         </Badge>
                                                     </td>
-                                                    <td className="py-2.5 text-xs text-muted-foreground">{r.reason}</td>
+                                                    <td className="py-3 px-4 text-[#A1A1AA]">
+                                                        {r.reason}
+                                                    </td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -463,37 +518,38 @@ export function PurchaseMappingPage() {
                     </Card>
                 </TabsContent>
 
-                {/* ---- ITEM SEARCH ---- */}
-                <TabsContent value="search">
-                    <Card className="mb-6">
-                        <CardHeader className="pb-3">
-                            <CardTitle className="flex items-center gap-2 text-base">
-                                <Search className="h-4 w-4" /> Find Customers by Item
+                {/* ---- 4. ITEM TAGGING ENGINE ---- */}
+                <TabsContent value="search" className="space-y-6">
+                    <Card className="border-[#222226] bg-[#111113]">
+                        <CardHeader className="pb-3 border-b border-[#1E1E22]">
+                            <CardTitle className="text-sm font-semibold text-white font-display flex items-center gap-2">
+                                <Sparkles className="h-4 w-4 text-zinc-400" />
+                                Item Customer Lookup & CRM Tag Dispatch
                             </CardTitle>
                         </CardHeader>
-                        <CardContent>
+                        <CardContent className="pt-4">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                                 <div className="flex-1">
-                                    <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                                        Item name (e.g. "Wings")
+                                    <label className="mb-1.5 block text-xs font-medium text-[#A1A1AA]">
+                                        Menu Item Query (e.g. "Wings", "Beer", "Burger")
                                     </label>
                                     <Input
-                                        placeholder="Enter an item name…"
+                                        placeholder="Enter item name…"
                                         value={search}
                                         onChange={(e) => setSearch(e.target.value)}
                                         onKeyDown={(e) => e.key === "Enter" && search_()}
-                                        className="h-9"
+                                        className="h-9 border-[#27272A] bg-[#141417] text-xs text-white"
                                     />
                                 </div>
                                 <div>
-                                    <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
-                                        Date range
+                                    <label className="mb-1.5 block text-xs font-medium text-[#A1A1AA]">
+                                        Filter Range
                                     </label>
                                     <Select value={range} onValueChange={(v) => setRange(v as Range)}>
-                                        <SelectTrigger className="h-9 w-[140px]">
+                                        <SelectTrigger className="h-9 w-[130px] border-[#27272A] bg-[#141417] text-xs text-white">
                                             <SelectValue />
                                         </SelectTrigger>
-                                        <SelectContent>
+                                        <SelectContent className="border-[#27272A] bg-[#141417] text-white">
                                             <SelectItem value="all">All time</SelectItem>
                                             <SelectItem value="today">Today</SelectItem>
                                             <SelectItem value="week">This Week</SelectItem>
@@ -501,163 +557,166 @@ export function PurchaseMappingPage() {
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                <Button onClick={search_} disabled={loading || !search.trim()} className="h-9">
+                                <Button
+                                    onClick={search_}
+                                    disabled={loading || !search.trim()}
+                                    className="h-9 bg-white text-zinc-950 hover:bg-zinc-200 font-semibold text-xs gap-1.5 shadow-xs"
+                                >
                                     {loading ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
                                     ) : (
-                                        <Search className="h-4 w-4" />
+                                        <Search className="h-3.5 w-3.5" />
                                     )}
-                                    Find Customers
+                                    Search Guests
                                 </Button>
                             </div>
-                            {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
+                            {error && <p className="mt-3 text-xs text-red-400">{error}</p>}
                         </CardContent>
                     </Card>
 
-                    {result && (
-                        <>
-                            {result.itemFound ? (
-                                <>
-                                    <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                                        <StatCard
-                                            label="Customers"
-                                            value={result.totalCustomers}
-                                            icon={<Users className="h-4 w-4" />}
-                                        />
-                                        <StatCard
-                                            label="Total Quantity"
-                                            value={result.totalQuantity}
-                                            icon={<Tag className="h-4 w-4" />}
-                                        />
-                                        <StatCard
-                                            label="Total Revenue"
-                                            value={money(result.totalRevenueCents)}
-                                            icon={<Tag className="h-4 w-4" />}
-                                        />
-                                        <StatCard
-                                            label="Item"
-                                            value={result.itemName}
-                                            icon={<Tag className="h-4 w-4" />}
-                                        />
+                    {result && result.itemFound && (
+                        <div className="space-y-4">
+                            <div className="grid gap-3 sm:grid-cols-4">
+                                <Card className="border-[#222226] bg-[#141417] p-3 text-xs">
+                                    <span className="text-[#71717A]">Purchasers</span>
+                                    <div className="text-xl font-bold font-mono text-white mt-1">
+                                        {result.totalCustomers}
                                     </div>
+                                </Card>
+                                <Card className="border-[#222226] bg-[#141417] p-3 text-xs">
+                                    <span className="text-[#71717A]">Total Units</span>
+                                    <div className="text-xl font-bold font-mono text-white mt-1">
+                                        {result.totalQuantity}
+                                    </div>
+                                </Card>
+                                <Card className="border-[#222226] bg-[#141417] p-3 text-xs">
+                                    <span className="text-[#71717A]">Revenue</span>
+                                    <div className="text-xl font-bold font-mono text-white mt-1">
+                                        {money(result.totalRevenueCents)}
+                                    </div>
+                                </Card>
+                                <Card className="border-[#222226] bg-[#141417] p-3 text-xs">
+                                    <span className="text-[#71717A]">Item Queried</span>
+                                    <div className="text-sm font-semibold text-zinc-200 mt-1 truncate">
+                                        {result.itemName}
+                                    </div>
+                                </Card>
+                            </div>
 
-                                    <Card className="mb-6">
-                                        <CardHeader className="pb-3">
-                                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                                <CardTitle className="text-base">
-                                                    Customers ({result.customers.length})
-                                                </CardTitle>
-                                                <Button
-                                                    onClick={applyTags}
-                                                    disabled={tagging || result.customers.length === 0}
-                                                    className="h-9"
-                                                >
-                                                    {tagging ? (
-                                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                                    ) : (
-                                                        <Tag className="h-4 w-4" />
-                                                    )}
-                                                    Apply "Purchased: {result.itemName}" Tags
-                                                </Button>
-                                            </div>
-                                        </CardHeader>
-                                        <CardContent>
-                                            {tagSummary && (
-                                                <div className="mb-4 rounded-md border border-border bg-muted/30 p-3 text-sm">
-                                                    <p className="font-medium">Tagging result</p>
-                                                    <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-                                                        <SummaryStat label="Processed" value={tagSummary.processed} />
-                                                        <SummaryStat label="Tags applied" value={tagSummary.tagsApplied} />
-                                                        <SummaryStat label="Already tagged" value={tagSummary.alreadyTagged} />
-                                                        <SummaryStat label="Verified" value={tagSummary.tagsVerified} />
-                                                        <SummaryStat label="Skipped" value={tagSummary.skipped} />
-                                                        <SummaryStat label="Errors" value={tagSummary.errors} />
-                                                    </div>
-                                                </div>
-                                            )}
-                                            <div className="overflow-x-auto">
-                                                <table className="w-full text-sm">
-                                                    <thead>
-                                                        <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                                                            <th className="pb-2 pr-4 font-medium">Customer</th>
-                                                            <th className="pb-2 pr-4 font-medium">Email / Phone</th>
-                                                            <th className="pb-2 pr-4 font-medium">Qty</th>
-                                                            <th className="pb-2 pr-4 font-medium">Spent</th>
-                                                            <th className="pb-2 pr-4 font-medium">Date</th>
-                                                            <th className="pb-2 pr-4 font-medium">Order</th>
-                                                            <th className="pb-2 pr-4 font-medium">Match</th>
-                                                            <th className="pb-2 font-medium">Tag</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {result.customers.map((c, i) => (
-                                                            <tr key={i} className="border-b border-border/50">
-                                                                <td className="py-2.5 pr-4 font-medium text-foreground">
-                                                                    {c.customerName}
-                                                                </td>
-                                                                <td className="py-2.5 pr-4 text-xs text-muted-foreground">
-                                                                    {c.email || c.phone || "—"}
-                                                                </td>
-                                                                <td className="py-2.5 pr-4">{c.quantity}</td>
-                                                                <td className="py-2.5 pr-4 font-medium">
-                                                                    {money(c.amountSpentCents)}
-                                                                </td>
-                                                                <td className="py-2.5 pr-4 text-xs text-muted-foreground">
-                                                                    {formatDateTime(c.purchaseDate)}
-                                                                </td>
-                                                                <td className="py-2.5 pr-4 font-mono text-xs text-muted-foreground">
-                                                                    {c.cloverOrderId}
-                                                                </td>
-                                                                <td className="py-2.5 pr-4">
-                                                                    <Badge
-                                                                        variant={(STATUS_COLORS[c.matchStatus] as any) ?? "outline"}
-                                                                        className="text-[10px]"
-                                                                    >
-                                                                        {c.matchStatus}
-                                                                    </Badge>
-                                                                </td>
-                                                                <td className="py-2.5 pr-4">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <Badge
-                                                                            variant={(STATUS_COLORS[c.tagStatus] as any) ?? "outline"}
-                                                                            className="text-[10px]"
-                                                                        >
-                                                                            {c.tagStatus}
-                                                                        </Badge>
-                                                                        {c.ghlContactId && (
-                                                                            <a
-                                                                                href={crmContactUrl(c.ghlContactId)}
-                                                                                target="_blank"
-                                                                                rel="noopener noreferrer"
-                                                                                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                                                                            >
-                                                                                View in CRM
-                                                                                <ExternalLink className="h-3 w-3" />
-                                                                            </a>
-                                                                        )}
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                </>
-                            ) : (
-                                <EmptyState
-                                    title="No matching item found"
-                                    description={`No purchased item matched "${search}". Make sure the item name matches a Clover item and that POS data has been synced.`}
-                                />
+                            {/* Tag summary notification */}
+                            {tagSummary && (
+                                <Card className="border-emerald-800/40 bg-emerald-950/20 p-4 text-xs text-emerald-200">
+                                    <div className="font-semibold flex items-center gap-1.5 mb-2">
+                                        <Check className="h-4 w-4 text-emerald-400" />
+                                        Tags Dispatched to GoHighLevel CRM
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                                        <div>Processed: <strong className="font-mono">{tagSummary.processed}</strong></div>
+                                        <div>Applied: <strong className="font-mono">{tagSummary.tagsApplied}</strong></div>
+                                        <div>Verified: <strong className="font-mono">{tagSummary.tagsVerified}</strong></div>
+                                        <div>Already Present: <strong className="font-mono">{tagSummary.alreadyTagged}</strong></div>
+                                    </div>
+                                </Card>
                             )}
-                        </>
+
+                            {/* Customer purchase results */}
+                            <Card className="border-[#222226] bg-[#111113]">
+                                <CardHeader className="pb-3 border-b border-[#1E1E22]">
+                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                        <CardTitle className="text-sm font-semibold text-white font-display">
+                                            Purchasers ({result.customers.length})
+                                        </CardTitle>
+                                        <Button
+                                            onClick={applyTags}
+                                            disabled={tagging || result.customers.length === 0}
+                                            className="h-8 bg-white hover:bg-zinc-200 text-xs font-semibold text-zinc-950 gap-1.5 shadow-xs"
+                                        >
+                                            {tagging ? (
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                            ) : (
+                                                <Tag className="h-3.5 w-3.5" />
+                                            )}
+                                            Apply "Clover - Purchased: {result.itemName}"
+                                        </Button>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="p-0">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left text-xs">
+                                            <thead>
+                                                <tr className="border-b border-[#1E1E22] bg-[#0E0E10] text-[#71717A]">
+                                                    <th className="py-3 px-4 font-medium">Customer Name</th>
+                                                    <th className="py-3 px-4 font-medium">Contact</th>
+                                                    <th className="py-3 px-4 font-medium">Qty</th>
+                                                    <th className="py-3 px-4 font-medium">Spent</th>
+                                                    <th className="py-3 px-4 font-medium">Date</th>
+                                                    <th className="py-3 px-4 font-medium">Clover Order</th>
+                                                    <th className="py-3 px-4 font-medium">CRM Contact</th>
+                                                    <th className="py-3 px-4 font-medium">Tag Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-[#1A1A1E]">
+                                                {result.customers.map((c, i) => (
+                                                    <tr key={i} className="hover:bg-[#161619] transition-colors">
+                                                        <td className="py-3 px-4 font-medium text-white">
+                                                            {c.customerName}
+                                                        </td>
+                                                        <td className="py-3 px-4 text-[#A1A1AA] font-mono text-[11px]">
+                                                            {c.email || c.phone || "—"}
+                                                        </td>
+                                                        <td className="py-3 px-4 font-mono font-medium text-white">
+                                                            {c.quantity}
+                                                        </td>
+                                                        <td className="py-3 px-4 font-mono text-white">
+                                                            {money(c.amountSpentCents)}
+                                                        </td>
+                                                        <td className="py-3 px-4 text-[#71717A]">
+                                                            {formatDateTime(c.purchaseDate)}
+                                                        </td>
+                                                        <td className="py-3 px-4 font-mono text-[11px] text-[#A1A1AA]">
+                                                            {c.cloverOrderId}
+                                                        </td>
+                                                        <td className="py-3 px-4 font-mono text-[11px]">
+                                                            {c.ghlContactId ? (
+                                                                <a
+                                                                    href={crmContactUrl(c.ghlContactId)}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="text-blue-400 hover:underline flex items-center gap-1"
+                                                                >
+                                                                    View in GHL
+                                                                    <ExternalLink className="h-2.5 w-2.5" />
+                                                                </a>
+                                                            ) : (
+                                                                <span className="text-[#52525B]">Unmatched</span>
+                                                            )}
+                                                        </td>
+                                                        <td className="py-3 px-4">
+                                                            <Badge
+                                                                variant="outline"
+                                                                className={
+                                                                    c.tagStatus === "TAG_APPLIED" || c.tagStatus === "ALREADY_TAGGED"
+                                                                        ? "border-emerald-800/40 bg-emerald-950/40 text-emerald-400 text-[10px]"
+                                                                        : "border-zinc-800 bg-zinc-900 text-zinc-400 text-[10px]"
+                                                                }
+                                                            >
+                                                                {c.tagStatus}
+                                                            </Badge>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
                     )}
 
-                    {!result && !loading && !error && (
+                    {result && !result.itemFound && (
                         <EmptyState
-                            title="Search for an item to begin"
-                            description="Enter an item name like “Wings” to find every customer who purchased it, then apply a purchase tag to their CRM contact."
+                            title="No matching item found"
+                            description={`No sales recorded for "${search}". Please verify the item name in your Clover inventory.`}
                         />
                     )}
                 </TabsContent>
@@ -666,33 +725,35 @@ export function PurchaseMappingPage() {
     );
 }
 
-function StatCard({
-    label,
-    value,
-    icon,
-}: {
-    label: string;
-    value: number | string;
-    icon: React.ReactNode;
-}) {
+function MatchMethodBadge({ method }: { method: string | null }) {
+    if (!method) return <span className="text-[#52525B] text-xs">—</span>;
+    const lower = method.toLowerCase();
+    if (lower.includes("phone")) {
+        return (
+            <Badge
+                variant="outline"
+                className="border-emerald-800/40 bg-emerald-950/40 text-emerald-400 text-[10px] gap-1"
+            >
+                <Phone className="h-2.5 w-2.5" /> Phone
+            </Badge>
+        );
+    }
+    if (lower.includes("email")) {
+        return (
+            <Badge
+                variant="outline"
+                className="border-blue-800/40 bg-blue-950/40 text-blue-400 text-[10px] gap-1"
+            >
+                <Mail className="h-2.5 w-2.5" /> Email
+            </Badge>
+        );
+    }
     return (
-        <Card>
-            <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-muted-foreground">{label}</span>
-                    {icon}
-                </div>
-                <p className="mt-1 truncate text-xl font-semibold text-foreground">{value}</p>
-            </CardContent>
-        </Card>
-    );
-}
-
-function SummaryStat({ label, value }: { label: string; value: number }) {
-    return (
-        <div>
-            <span className="text-xs text-muted-foreground">{label}</span>
-            <p className="font-semibold">{value}</p>
-        </div>
+        <Badge
+            variant="outline"
+            className="border-purple-800/40 bg-purple-950/40 text-purple-300 text-[10px]"
+        >
+            {method}
+        </Badge>
     );
 }
