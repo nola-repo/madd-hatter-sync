@@ -1,5 +1,5 @@
 //
-// Thin server-function wrappers. No runtime helpers here — all logic lives in
+// Thin server-function wrappers. No runtime helpers here â€” all logic lives in
 // imported .server.ts modules. Safe to import from client code.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -102,10 +102,10 @@ export const testSupabaseConnection = createServerFn({ method: "GET" }).handler(
                 result.publishableKeyOk = true;
             } else {
                 const body = await res.text().catch(() => "");
-                result.detail = `${result.detail ? result.detail + " · " : ""}Publishable key check failed (HTTP ${res.status})${body ? `: ${body.slice(0, 120)}` : ""}`;
+                result.detail = `${result.detail ? result.detail + " Â· " : ""}Publishable key check failed (HTTP ${res.status})${body ? `: ${body.slice(0, 120)}` : ""}`;
             }
         } catch (e: any) {
-            result.detail = `${result.detail ? result.detail + " · " : ""}Publishable key check error: ${e?.message ?? "unknown"}`;
+            result.detail = `${result.detail ? result.detail + " Â· " : ""}Publishable key check error: ${e?.message ?? "unknown"}`;
         }
 
         if (result.secretKeyOk && result.publishableKeyOk) {
@@ -568,7 +568,7 @@ export const getOrderDetailFn = createServerFn({ method: "GET" })
     });
 
 // ---- Purchase mapping: "Who bought Wings?" ----------------------------
-// Item → customer lookup, customer purchase history, and GHL purchase tagging.
+// Item â†’ customer lookup, customer purchase history, and GHL purchase tagging.
 
 export const findItemCustomers = createServerFn({ method: "GET" })
     .validator((data) =>
@@ -697,3 +697,54 @@ export const getSyncedContactsFn = createServerFn({ method: "GET" })
             throw e;
         }
     });
+
+// ---- Reconciliation data (last sync run) --------------------------------
+// Surfaces the reconciliation block from the most recent sync_run row so
+// the Analytics page can compare our totals against what Clover reports.
+
+export const getReconciliation = createServerFn({ method: "GET" }).handler(async () => {
+    await requireAdmin();
+    try {
+        const sb = getSupabaseServer();
+        const { data, error } = await sb
+            .from("sync_runs")
+            .select("id, started_at, finished_at, status, reconciliation, orders_upserted, customers_upserted")
+            .order("started_at", { ascending: false })
+            .limit(5);
+
+        if (error) throw error;
+
+        const runs = (data ?? []).map((r: any) => ({
+            runId: r.id as string,
+            startedAt: r.started_at as string | null,
+            finishedAt: r.finished_at as string | null,
+            status: r.status as string,
+            ordersUpserted: (r.orders_upserted ?? 0) as number,
+            customersUpserted: (r.customers_upserted ?? 0) as number,
+            reconciliation: r.reconciliation as {
+                rangeLabel: string;
+                rangeStartMs: number;
+                rangeEndMs: number;
+                ordersFetched: number;
+                pagesFetched: number;
+                paymentsFetched: number;
+                refundsFetched: number;
+                voidsFetched: number;
+                grossSalesCents: number;
+                discountsCents: number;
+                taxesCents: number;
+                tipsCents: number;
+                serviceChargesCents: number;
+                refundAmountCents: number;
+                netSalesCents: number;
+                paidOrderCount: number;
+                itemsSold: number;
+            } | null,
+        }));
+
+        return { setupRequired: false as const, runs };
+    } catch (e) {
+        if (isSetupRequired(e)) return setupRequiredResponse(e);
+        throw e;
+    }
+});

@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as ApiDiagRouteImport } from './routes/api/diag'
+import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiSyncRouteImport } from './routes/api/sync'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
 import { Route as AuthenticatedAdminAnalyticsRouteImport } from './routes/_authenticated/admin.analytics'
@@ -58,6 +59,11 @@ const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
 const ApiDiagRoute = ApiDiagRouteImport.update({
   id: '/api/diag',
   path: '/api/diag',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiHealthRoute = ApiHealthRouteImport.update({
+  id: '/api/health',
+  path: '/api/health',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSyncRoute = ApiSyncRouteImport.update({
@@ -184,6 +190,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/api/diag': typeof ApiDiagRoute
+  '/api/health': typeof ApiHealthRoute
   '/api/sync': typeof ApiSyncRoute
   '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/admin/categories': typeof AuthenticatedAdminCategoriesRoute
@@ -210,6 +217,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/api/diag': typeof ApiDiagRoute
+  '/api/health': typeof ApiHealthRoute
   '/api/sync': typeof ApiSyncRoute
   '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/admin/categories': typeof AuthenticatedAdminCategoriesRoute
@@ -239,6 +247,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/api/diag': typeof ApiDiagRoute
+  '/api/health': typeof ApiHealthRoute
   '/api/sync': typeof ApiSyncRoute
   '/_authenticated/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/_authenticated/admin/categories': typeof AuthenticatedAdminCategoriesRoute
@@ -268,6 +277,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/admin'
     | '/api/diag'
+    | '/api/health'
     | '/api/sync'
     | '/admin/analytics'
     | '/admin/categories'
@@ -294,6 +304,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/api/diag'
+    | '/api/health'
     | '/api/sync'
     | '/admin/analytics'
     | '/admin/categories'
@@ -322,6 +333,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/_authenticated/admin'
     | '/api/diag'
+    | '/api/health'
     | '/api/sync'
     | '/_authenticated/admin/analytics'
     | '/_authenticated/admin/categories'
@@ -350,6 +362,7 @@ export interface RootRouteChildren {
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   LoginRoute: typeof LoginRoute
   ApiDiagRoute: typeof ApiDiagRoute
+  ApiHealthRoute: typeof ApiHealthRoute
   ApiSyncRoute: typeof ApiSyncRoute
   ApiAuthLoginRoute: typeof ApiAuthLoginRoute
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
@@ -391,6 +404,13 @@ declare module '@tanstack/react-router' {
       path: '/api/diag'
       fullPath: '/api/diag'
       preLoaderRoute: typeof ApiDiagRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/health': {
+      id: '/api/health'
+      path: '/api/health'
+      fullPath: '/api/health'
+      preLoaderRoute: typeof ApiHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/sync': {
@@ -605,6 +625,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   LoginRoute: LoginRoute,
   ApiDiagRoute: ApiDiagRoute,
+  ApiHealthRoute: ApiHealthRoute,
   ApiSyncRoute: ApiSyncRoute,
   ApiAuthLoginRoute: ApiAuthLoginRoute,
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,

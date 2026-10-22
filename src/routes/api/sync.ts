@@ -4,24 +4,25 @@ import { syncOrderToGhl } from "@/lib/integration/sync.server";
 import { processPendingPurchases } from "@/lib/integration/purchase-ops.server";
 import { getIntegrationConfig } from "@/lib/integration/config.server";
 import { getSupabaseServer } from "@/lib/integration/supabase.server";
+import { sendSyncAlert } from "@/lib/integration/alert.server";
 
 // -------------------------------------------------------------------------
-// /api/sync — Sync entry point for cron-job.org and Clover webhooks
+// /api/sync â€” Sync entry point for cron-job.org and Clover webhooks
 //
 // IMPORTANT: GHL AI Studio runs on Cloudflare Workers (Nitro/serverless).
 // There are NO background threads. All work must complete before the response.
 // cron-job.org max timeout = 30 seconds, so we split the pipeline into steps:
 //
-//   GET /api/sync?secret=...&step=fetch  → Pull Clover data into Supabase (~5-10s)
-//   GET /api/sync?secret=...&step=push   → Push pending orders to GHL (~10-20s)
-//   GET /api/sync?secret=...             → Run both steps (may timeout on large datasets)
+//   GET /api/sync?secret=...&step=fetch  â†’ Pull Clover data into Supabase (~5-10s)
+//   GET /api/sync?secret=...&step=push   â†’ Push pending orders to GHL (~10-20s)
+//   GET /api/sync?secret=...             â†’ Run both steps (may timeout on large datasets)
 //
 // RECOMMENDED CRON SETUP (cron-job.org):
 //   Job A: GET /api/sync?secret=...&step=fetch  every 15 min
 //   Job B: GET /api/sync?secret=...&step=push   every 15 min  (offset by 2 minutes)
 //
 // CLOVER WEBHOOK (POST):
-//   Configure webhook URL in Clover Dashboard → App Settings → Webhooks.
+//   Configure webhook URL in Clover Dashboard â†’ App Settings â†’ Webhooks.
 // -------------------------------------------------------------------------
 
 export const Route = createFileRoute("/api/sync")({
@@ -48,13 +49,13 @@ export const Route = createFileRoute("/api/sync")({
 
                 try {
                     if (step === "fetch") {
-                        // Step A only: pull Clover → Supabase (fast, ~5-10s)
+                        // Step A only: pull Clover â†’ Supabase (fast, ~5-10s)
                         const result = await stepFetch();
                         return Response.json({ ok: true, step: "fetch", ...result });
                     }
 
                     if (step === "push") {
-                        // Step B only: Supabase → GHL contacts + Purchase Items (fast with small limit)
+                        // Step B only: Supabase â†’ GHL contacts + Purchase Items (fast with small limit)
                         const result = await stepPush(batchLimit);
                         return Response.json({ ok: true, step: "push", ...result });
                     }
@@ -191,6 +192,12 @@ async function stepPush(limit = 25) {
 // ---- Failure logging to Supabase ----------------------------------------
 
 async function logFailure(e: any) {
+    await sendSyncAlert({
+        level: "error",
+        title: "Madd Hatter Sync Failed",
+        detail: e?.message ?? String(e),
+        context: { timestamp: new Date().toISOString() },
+    });
     try {
         const sb = getSupabaseServer();
         const cfg = getIntegrationConfig();
@@ -206,3 +213,4 @@ async function logFailure(e: any) {
         console.error("[sync] Failed to write failure record to DB:", dbErr);
     }
 }
+
