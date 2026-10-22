@@ -4,14 +4,14 @@
 import { getIntegrationConfig } from "./config.server";
 
 class GhlApiError extends Error {
-    status: number;
-    body: string;
-    constructor(status: number, body: string) {
-        super(`GHL API error ${status}: ${body.slice(0, 300)}`);
-        this.name = "GhlApiError";
-        this.status = status;
-        this.body = body;
-    }
+  status: number;
+  body: string;
+  constructor(status: number, body: string) {
+    super(`GHL API error ${status}: ${body.slice(0, 300)}`);
+    this.name = "GhlApiError";
+    this.status = status;
+    this.body = body;
+  }
 }
 
 /**
@@ -19,15 +19,18 @@ class GhlApiError extends Error {
  * required for subaccount-scoped Private Integration Tokens. Without it,
  * tag operations silently fail with 401/403 despite the connection showing 200.
  */
-function ghlHeaders(cfg: ReturnType<typeof getIntegrationConfig>, extra: Record<string, string> = {}): Record<string, string> {
-    return {
-        Authorization: `Bearer ${cfg.ghl.pitToken?.trim() ?? ""}`,
-        Version: "2021-07-28",
-        // channelId is required for subaccount-scoped Private Integration Tokens.
-        channelId: cfg.ghl.locationId,
-        Accept: "application/json",
-        ...extra,
-    };
+function ghlHeaders(
+  cfg: ReturnType<typeof getIntegrationConfig>,
+  extra: Record<string, string> = {},
+): Record<string, string> {
+  return {
+    Authorization: `Bearer ${cfg.ghl.pitToken?.trim() ?? ""}`,
+    Version: "2021-07-28",
+    // channelId is required for subaccount-scoped Private Integration Tokens.
+    channelId: cfg.ghl.locationId,
+    Accept: "application/json",
+    ...extra,
+  };
 }
 
 /**
@@ -35,44 +38,44 @@ function ghlHeaders(cfg: ReturnType<typeof getIntegrationConfig>, extra: Record<
  * "WINGS", "Wings", "  wings " all become "Wings".
  */
 export function normalizeItemName(name: string): string {
-    return name
-        .trim()
-        .replace(/\s+/g, " ")
-        .replace(/\b\w/g, (c) => c.toUpperCase())
-        .replace(/\B\w/g, (c) => c.toLowerCase());
+  return name
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .replace(/\B\w/g, (c) => c.toLowerCase());
 }
 
 /**
  * The tag label applied to a GHL contact, e.g. "Purchased: Wings".
  */
 export function purchaseTagLabel(itemName: string): string {
-    return `Clover - Purchased: ${normalizeItemName(itemName)}`;
+  return `Clover - Purchased: ${normalizeItemName(itemName)}`;
 }
 
 export type TagResult = {
-    status: "applied" | "already_tagged" | "error";
-    error: string | null;
+  status: "applied" | "already_tagged" | "error";
+  error: string | null;
 };
 
 export type TagVerificationResult = {
-    verified: boolean;
-    status: "verified" | "failed" | "out_of_sync";
-    error: string | null;
+  verified: boolean;
+  status: "verified" | "failed" | "out_of_sync";
+  error: string | null;
 };
 
 /**
  * Fetch the current tags on a GHL contact.
  */
 export async function getContactTags(contactId: string): Promise<string[]> {
-    const cfg = getIntegrationConfig();
-    const res = await fetch(`${cfg.ghl.apiBase}/contacts/${contactId}`, {
-        headers: ghlHeaders(cfg),
-    });
-    const text = await res.text();
-    if (!res.ok) throw new GhlApiError(res.status, text);
-    const json = text ? JSON.parse(text) : null;
-    const tags = json?.contact?.tags ?? json?.tags ?? [];
-    return Array.isArray(tags) ? tags : [];
+  const cfg = getIntegrationConfig();
+  const res = await fetch(`${cfg.ghl.apiBase}/contacts/${contactId}`, {
+    headers: ghlHeaders(cfg),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new GhlApiError(res.status, text);
+  const json = text ? JSON.parse(text) : null;
+  const tags = json?.contact?.tags ?? json?.tags ?? [];
+  return Array.isArray(tags) ? tags : [];
 }
 
 /**
@@ -81,36 +84,36 @@ export async function getContactTags(contactId: string): Promise<string[]> {
  * Does NOT remove or modify any other existing tags.
  */
 export async function applyPurchaseTag(contactId: string, itemName: string): Promise<TagResult> {
-    const tag = purchaseTagLabel(itemName);
-    const cfg = getIntegrationConfig();
+  const tag = purchaseTagLabel(itemName);
+  const cfg = getIntegrationConfig();
 
+  try {
+    // Check existing tags to avoid duplicates.
+    let existing: string[] = [];
     try {
-        // Check existing tags to avoid duplicates.
-        let existing: string[] = [];
-        try {
-            existing = await getContactTags(contactId);
-        } catch {
-            // If we can't read tags, proceed to add — GHL dedupes on its side too.
-        }
-        if (existing.some((t) => t.toLowerCase() === tag.toLowerCase())) {
-            return { status: "already_tagged", error: null };
-        }
-
-        // Add the tag via the contacts/tags endpoint.
-        const res = await fetch(`${cfg.ghl.apiBase}/contacts/${contactId}/tags`, {
-            method: "POST",
-            headers: ghlHeaders(cfg, { "Content-Type": "application/json" }),
-            body: JSON.stringify({ tags: [tag] }),
-        });
-        const text = await res.text();
-        if (!res.ok) throw new GhlApiError(res.status, text);
-        return { status: "applied", error: null };
-    } catch (e: any) {
-        return {
-            status: "error",
-            error: e?.message ?? String(e),
-        };
+      existing = await getContactTags(contactId);
+    } catch {
+      // If we can't read tags, proceed to add — GHL dedupes on its side too.
     }
+    if (existing.some((t) => t.toLowerCase() === tag.toLowerCase())) {
+      return { status: "already_tagged", error: null };
+    }
+
+    // Add the tag via the contacts/tags endpoint.
+    const res = await fetch(`${cfg.ghl.apiBase}/contacts/${contactId}/tags`, {
+      method: "POST",
+      headers: ghlHeaders(cfg, { "Content-Type": "application/json" }),
+      body: JSON.stringify({ tags: [tag] }),
+    });
+    const text = await res.text();
+    if (!res.ok) throw new GhlApiError(res.status, text);
+    return { status: "applied", error: null };
+  } catch (e: any) {
+    return {
+      status: "error",
+      error: e?.message ?? String(e),
+    };
+  }
 }
 
 /**
@@ -124,26 +127,26 @@ export async function applyPurchaseTag(contactId: string, itemName: string): Pro
  *   - "out_of_sync": contact read OK, but the expected tag is missing.
  */
 export async function verifyPurchaseTag(
-    contactId: string,
-    itemName: string,
+  contactId: string,
+  itemName: string,
 ): Promise<TagVerificationResult> {
-    const tag = purchaseTagLabel(itemName);
-    try {
-        const tags = await getContactTags(contactId);
-        const present = tags.some((t) => t.toLowerCase() === tag.toLowerCase());
-        if (present) {
-            return { verified: true, status: "verified", error: null };
-        }
-        return {
-            verified: false,
-            status: "out_of_sync",
-            error: `Tag "${tag}" was applied but is not present on contact ${contactId}.`,
-        };
-    } catch (e: any) {
-        return {
-            verified: false,
-            status: "failed",
-            error: e?.message ?? String(e),
-        };
+  const tag = purchaseTagLabel(itemName);
+  try {
+    const tags = await getContactTags(contactId);
+    const present = tags.some((t) => t.toLowerCase() === tag.toLowerCase());
+    if (present) {
+      return { verified: true, status: "verified", error: null };
     }
+    return {
+      verified: false,
+      status: "out_of_sync",
+      error: `Tag "${tag}" was applied but is not present on contact ${contactId}.`,
+    };
+  } catch (e: any) {
+    return {
+      verified: false,
+      status: "failed",
+      error: e?.message ?? String(e),
+    };
+  }
 }
