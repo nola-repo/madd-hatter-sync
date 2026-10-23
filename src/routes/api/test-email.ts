@@ -14,16 +14,16 @@ export const Route = createFileRoute("/api/test-email")({
       GET: async ({ request }) => {
         try {
           const url = new URL(request.url);
-          const syncSecret = (process.env.SYNC_SECRET ?? "").trim();
+          const syncSecret = (process.env["SYNC_SECRET"] ?? "").trim();
           const provided = url.searchParams.get("secret") ?? "";
           if (!syncSecret || provided !== syncSecret) {
             return Response.json({ error: "Unauthorized" }, { status: 401 });
           }
 
-          const apiKey = (process.env.RESEND_API_KEY ?? "").trim();
-          const fromAddress = (process.env.EMAIL_FROM_ADDRESS ?? "").trim();
+          const apiKey = (process.env["RESEND_API_KEY"] ?? "").trim();
+          const fromAddress = (process.env["EMAIL_FROM_ADDRESS"] ?? "").trim();
           const superAdminEmail =
-            (process.env.SUPER_ADMIN_EMAIL ?? SUPER_ADMIN_EMAIL).trim().toLowerCase() ||
+            (process.env["SUPER_ADMIN_EMAIL"] ?? SUPER_ADMIN_EMAIL).trim().toLowerCase() ||
             SUPER_ADMIN_EMAIL;
 
           // Show the domain part of the from address (not the full secret)

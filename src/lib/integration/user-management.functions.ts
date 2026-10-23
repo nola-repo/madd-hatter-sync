@@ -76,10 +76,10 @@ export const listManagedUsers = createServerFn({ method: "GET" }).handler(async 
       for (const u of batch) {
         users.push({
           id: u.id,
-          email: u.email ?? undefined,
-          created_at: u.created_at ?? undefined,
-          last_sign_in_at: u.last_sign_in_at ?? undefined,
-          user_metadata: u.user_metadata ?? undefined,
+          ...(u.email ? { email: u.email } : {}),
+          ...(u.created_at ? { created_at: u.created_at } : {}),
+          ...(u.last_sign_in_at ? { last_sign_in_at: u.last_sign_in_at } : {}),
+          ...(u.user_metadata ? { user_metadata: u.user_metadata } : {}),
         });
       }
       if (batch.length < 1000) break;
