@@ -19,6 +19,10 @@ src/tailwind.config.vibe.json
 
 # Wrangler / Cloudflare
 .wrangler/
+# Environment files
+.env
+.env.*
+!.env.example
 .dev.vars
 
 # Editor directories and files
