@@ -100,7 +100,7 @@ function splitSqlStatements(sql: string): string[] {
     if (ch === "$") {
       // Try to read a dollar-quote tag: $[A-Za-z_0-9]*$
       let j = i + 1;
-      while (j < n && /[A-Za-z0-9_]/.test(sql[j])) j += 1;
+      while (j < n && /[A-Za-z0-9_]/.test(sql[j] ?? "")) j += 1;
       if (j < n && sql[j] === "$") {
         const tag = sql.slice(i, j + 1); // includes both $ signs
         buf += tag;

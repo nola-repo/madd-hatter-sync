@@ -56,8 +56,8 @@ export const getProfile = createServerFn({ method: "GET" }).handler(async () => 
       setupRequired: false as const,
       userId: u.id,
       email: u.email ?? "",
-      fullName: (u.user_metadata?.full_name as string | undefined) ?? null,
-      nickname: (u.user_metadata?.nickname as string | undefined) ?? null,
+      fullName: (u.user_metadata?.["full_name"] as string | undefined) ?? null,
+      nickname: (u.user_metadata?.["nickname"] as string | undefined) ?? null,
       createdAt: u.created_at ?? null,
       lastSignInAt: u.last_sign_in_at ?? null,
     } satisfies ProfileData;

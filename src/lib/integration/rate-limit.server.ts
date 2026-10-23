@@ -70,8 +70,13 @@ export async function withRateLimit<T>(
           status,
           delayMs,
           attempt: 0,
-          cloverCustomerId: ctx.cloverCustomerId,
-          error: typeof e?.body === "string" ? e.body.slice(0, 200) : e?.message,
+          ...(ctx.cloverCustomerId !== undefined ? { cloverCustomerId: ctx.cloverCustomerId } : {}),
+          error:
+            typeof e?.body === "string"
+              ? e.body.slice(0, 200)
+              : e?.message != null
+                ? String(e.message)
+                : null,
         });
       } catch {
         /* ignore */
@@ -88,8 +93,13 @@ export async function withRateLimit<T>(
             status: s2,
             delayMs: 0,
             attempt: 1,
-            cloverCustomerId: ctx.cloverCustomerId,
-            error: typeof e2?.body === "string" ? e2.body.slice(0, 200) : e2?.message,
+            ...(ctx.cloverCustomerId !== undefined ? { cloverCustomerId: ctx.cloverCustomerId } : {}),
+            error:
+              typeof e2?.body === "string"
+                ? e2.body.slice(0, 200)
+                : e2?.message != null
+                  ? String(e2.message)
+                  : null,
           });
         } catch {
           /* ignore */

@@ -34,7 +34,11 @@ export function getIntegrationConfig(): IntegrationConfig {
 
   const cloverMerchantId = (process.env["CLOVER_MERCHANT_ID"] ?? "").trim();
   // Support both CLOVER_ACCESS_TOKEN (preferred) and legacy CLOVER_API_KEY
-  const cloverApiKey = (process.env["CLOVER_ACCESS_TOKEN"] || process.env["CLOVER_API_KEY"] || "").trim();
+  const cloverApiKey = (
+    process.env["CLOVER_ACCESS_TOKEN"] ||
+    process.env["CLOVER_API_KEY"] ||
+    ""
+  ).trim();
   const ghlLocationId = (process.env["GHL_LOCATION_ID"] ?? "").trim();
   const ghlPitToken = (process.env["GHL_PIT_TOKEN"] ?? "").trim();
   const supabaseUrl = (process.env["SUPABASE_URL"] ?? "").trim();

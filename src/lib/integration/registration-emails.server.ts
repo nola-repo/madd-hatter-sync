@@ -22,7 +22,7 @@ import {
 } from "./email.server";
 
 function appBaseUrl(): string {
-  return (process.env.APP_PUBLIC_URL ?? "https://cloverapi.hobokenmaddhatter.com").replace(
+  return (process.env["APP_PUBLIC_URL"] ?? "https://cloverapi.hobokenmaddhatter.com").replace(
     /\/$/,
     "",
   );
@@ -48,7 +48,7 @@ async function alreadySent(
       // Column or table missing — treat as "not sent" so we still send.
       return false;
     }
-    return Boolean(data?.[column]);
+    return Boolean((data as Record<string, unknown> | null)?.[column]);
   } catch {
     return false;
   }
@@ -140,7 +140,7 @@ export async function sendRegistrationNotifications(input: {
   let alert: "sent" | "skipped" | "failed" = "skipped";
   try {
     const superAdminEmail =
-      (process.env.SUPER_ADMIN_EMAIL ?? SUPER_ADMIN_EMAIL).trim().toLowerCase() ||
+      (process.env["SUPER_ADMIN_EMAIL"] ?? SUPER_ADMIN_EMAIL).trim().toLowerCase() ||
       SUPER_ADMIN_EMAIL;
 
     if (await alreadySent(input.userId, "approval_alert_sent_at")) {

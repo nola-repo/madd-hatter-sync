@@ -263,10 +263,10 @@ export const getOrdersList = createServerFn({ method: "GET" })
     await requireAdmin();
     try {
       const res = await listOrders({
-        ...(data.search ? { search: data.search } : {}),
-        ...(data.paymentStatus ? { paymentStatus: data.paymentStatus } : {}),
         limit: data.limit,
         offset: data.offset,
+        ...(data.search ? { search: data.search } : {}),
+        ...(data.paymentStatus ? { paymentStatus: data.paymentStatus } : {}),
       });
       return { setupRequired: false as const, ...res };
     } catch (e) {
@@ -289,9 +289,9 @@ export const getOrderItemsList = createServerFn({ method: "GET" })
     await requireAdmin();
     try {
       const res = await listOrderItems({
-        search: data.search,
         limit: data.limit,
         offset: data.offset,
+        ...(data.search ? { search: data.search } : {}),
       });
       return { setupRequired: false as const, ...res };
     } catch (e) {
@@ -314,9 +314,9 @@ export const getCustomersList = createServerFn({ method: "GET" })
     await requireAdmin();
     try {
       const res = await listCustomers({
-        search: data.search,
         limit: data.limit,
         offset: data.offset,
+        ...(data.search ? { search: data.search } : {}),
       });
       return { setupRequired: false as const, ...res };
     } catch (e) {
@@ -339,7 +339,7 @@ export const getCustomerPurchasesListFn = createServerFn({ method: "GET" })
     await requireAdmin();
     try {
       const res = await listCustomersWithPurchases({
-        search: data.search,
+        ...(data.search ? { search: data.search } : {}),
         limit: data.limit,
         offset: data.offset,
       });
@@ -364,7 +364,7 @@ export const getProductsList = createServerFn({ method: "GET" })
     await requireAdmin();
     try {
       const res = await listProducts({
-        search: data.search,
+        ...(data.search ? { search: data.search } : {}),
         limit: data.limit,
         offset: data.offset,
       });
@@ -393,9 +393,9 @@ export const refreshPos = createServerFn({ method: "POST" })
     try {
       const summary = await refreshPosData({
         kind: data.kind,
-        range: data.range,
-        startDate: data.startDate,
-        endDate: data.endDate,
+        ...(data.range ? { range: data.range } : {}),
+        ...(data.startDate ? { startDate: data.startDate } : {}),
+        ...(data.endDate ? { endDate: data.endDate } : {}),
       });
       return { setupRequired: false as const, summary };
     } catch (e) {
@@ -433,7 +433,7 @@ export const getTransactionsList = createServerFn({ method: "GET" })
     await requireAdmin();
     try {
       const res = await listTransactions({
-        search: data.search,
+        ...(data.search ? { search: data.search } : {}),
         limit: data.limit,
         offset: data.offset,
       });
@@ -460,7 +460,7 @@ export const getInventoryProductsList = createServerFn({ method: "GET" })
     await requireAdmin();
     try {
       const res = await listInventoryProducts({
-        search: data.search,
+        ...(data.search ? { search: data.search } : {}),
         limit: data.limit,
         offset: data.offset,
       });
@@ -487,7 +487,7 @@ export const getCategoriesList = createServerFn({ method: "GET" })
     await requireAdmin();
     try {
       const res = await listCategories({
-        search: data.search,
+        ...(data.search ? { search: data.search } : {}),
         limit: data.limit,
         offset: data.offset,
       });
@@ -514,7 +514,7 @@ export const getEmployeesList = createServerFn({ method: "GET" })
     await requireAdmin();
     try {
       const res = await listEmployees({
-        search: data.search,
+        ...(data.search ? { search: data.search } : {}),
         limit: data.limit,
         offset: data.offset,
       });
@@ -541,7 +541,7 @@ export const getCustomerDetailsList = createServerFn({ method: "GET" })
     await requireAdmin();
     try {
       const res = await listCustomerDetails({
-        search: data.search,
+        ...(data.search ? { search: data.search } : {}),
         limit: data.limit,
         offset: data.offset,
       });
@@ -584,9 +584,9 @@ export const findItemCustomers = createServerFn({ method: "GET" })
     await requireAdmin();
     try {
       const res = await findCustomersByItem({
-        itemId: data.itemId,
-        itemName: data.itemName,
-        range: data.range,
+        ...(data.itemId ? { itemId: data.itemId } : {}),
+        ...(data.itemName ? { itemName: data.itemName } : {}),
+        ...(data.range ? { range: data.range } : {}),
       });
       return { setupRequired: false as const, ...res };
     } catch (e) {
@@ -609,9 +609,9 @@ export const tagItemCustomers = createServerFn({ method: "POST" })
     await requireAdmin();
     try {
       const res = await tagCustomersByItem({
-        itemId: data.itemId,
-        itemName: data.itemName,
-        range: data.range,
+        ...(data.itemId ? { itemId: data.itemId } : {}),
+        ...(data.itemName ? { itemName: data.itemName } : {}),
+        ...(data.range ? { range: data.range } : {}),
       });
       return { setupRequired: false as const, ...res };
     } catch (e) {

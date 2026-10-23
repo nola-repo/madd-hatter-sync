@@ -79,10 +79,10 @@ export const getFilteredCustomerPurchasesFn = createServerFn({ method: "GET" })
     try {
       const { listFilteredCustomersWithPurchases } = await import("./customer-purchases.server");
       const res = await listFilteredCustomersWithPurchases({
-        search: data.search,
+        ...(data.search ? { search: data.search } : {}),
         limit: data.limit,
         offset: data.offset,
-        range: !data.range || data.range === "all" ? undefined : (data.range as any),
+        ...(data.range && data.range !== "all" ? { range: data.range as any } : {}),
       });
       return { setupRequired: false as const, ...res };
     } catch (e) {

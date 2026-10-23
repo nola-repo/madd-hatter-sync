@@ -195,15 +195,15 @@ export function SyncDashboard({ orderId, setOrderId, getStatus, getSchema, previ
       {/* Schema status */}
       {schema && (
         <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">CRM Custom Object: “POS Purchase Item”</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <SchemaSection
-            schema={schema}
-            {...(status?.ghl?.locationId ? { locationId: status.ghl!.locationId! } : {})}
-          />
-        </CardContent>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">CRM Custom Object: “POS Purchase Item”</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SchemaSection
+              schema={schema}
+              {...(status?.ghl?.locationId ? { locationId: status.ghl!.locationId! } : {})}
+            />
+          </CardContent>
         </Card>
       )}
 

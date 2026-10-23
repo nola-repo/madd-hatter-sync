@@ -62,10 +62,10 @@ export const listManagedUsers = createServerFn({ method: "GET" }).handler(async 
     // Pull every auth user (admin API). listUsers returns up to 1000 per page.
     const users: Array<{
       id: string;
-      email: string | undefined;
-      created_at: string | undefined;
-      last_sign_in_at: string | undefined;
-      user_metadata: Record<string, unknown> | undefined;
+      email?: string;
+      created_at?: string;
+      last_sign_in_at?: string;
+      user_metadata?: Record<string, unknown>;
     }> = [];
     let page = 1;
     // eslint-disable-next-line no-constant-condition
@@ -73,7 +73,15 @@ export const listManagedUsers = createServerFn({ method: "GET" }).handler(async 
       const res = await sb.auth.admin.listUsers({ page });
       if (res.error) throw new Error(`listUsers: ${res.error.message}`);
       const batch = res.data.users ?? [];
-      users.push(...batch);
+      for (const u of batch) {
+        users.push({
+          id: u.id,
+          email: u.email,
+          created_at: u.created_at,
+          last_sign_in_at: u.last_sign_in_at,
+          user_metadata: u.user_metadata,
+        });
+      }
       if (batch.length < 1000) break;
       page += 1;
       if (page > 10) break; // hard cap to avoid runaway loops

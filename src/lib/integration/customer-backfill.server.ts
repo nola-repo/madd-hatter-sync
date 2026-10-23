@@ -434,25 +434,29 @@ export async function backfillStrandedCustomers(
         const phoneOnly = phoneMatches.filter((m) => !emailIds.has(m.id));
 
         if (emailOnly.length > 0 && phoneOnly.length > 0) {
-          // Genuine conflict: email and phone point to different contacts.
-          out.conflicts += 1;
-          await logBackfillAudit({
-            cloverCustomerId: c.clover_customer_id,
-            status: "CONFLICT",
-            method: "none",
-            reason:
-              `Email matches CRM contact ${emailOnly[0].id} but phone matches a different contact ${phoneOnly[0].id}. ` +
-              `Requires human review — no mapping created.`,
-            email,
-            phone,
-            emailContactId: emailOnly[0].id,
-            phoneContactId: phoneOnly[0].id,
-          });
+          const emailContact = emailOnly[0];
+          const phoneContact = phoneOnly[0];
+          if (emailContact && phoneContact) {
+            // Genuine conflict: email and phone point to different contacts.
+            out.conflicts += 1;
+            await logBackfillAudit({
+              cloverCustomerId: c.clover_customer_id,
+              status: "CONFLICT",
+              method: "none",
+              reason:
+                `Email matches CRM contact ${emailContact.id} but phone matches a different contact ${phoneContact.id}. ` +
+                `Requires human review — no mapping created.`,
+              email,
+              phone,
+              emailContactId: emailContact.id,
+              phoneContactId: phoneContact.id,
+            });
+          }
           continue; // failure-isolated: keep processing the rest of the queue
         }
 
         // Unambiguous overlap → reuse the single shared contact.
-        if (overlap.length === 1) {
+        if (overlap.length === 1 && overlap[0]) {
           const ghlContactId = overlap[0].id;
           await persistMappingSafe(c.clover_customer_id, ghlContactId, "email_phone", email, phone);
           out.matchedExisting += 1;
@@ -484,7 +488,7 @@ export async function backfillStrandedCustomers(
       }
 
       // 3. Unique email match.
-      if (emailMatches.length === 1) {
+      if (emailMatches.length === 1 && emailMatches[0]) {
         const ghlContactId = emailMatches[0].id;
         await persistMappingSafe(c.clover_customer_id, ghlContactId, "email", email, phone);
         out.matchedExisting += 1;
@@ -503,7 +507,7 @@ export async function backfillStrandedCustomers(
       }
 
       // 4. Unique phone match.
-      if (phoneMatches.length === 1) {
+      if (phoneMatches.length === 1 && phoneMatches[0]) {
         const ghlContactId = phoneMatches[0].id;
         await persistMappingSafe(c.clover_customer_id, ghlContactId, "phone", email, phone);
         out.matchedExisting += 1;
@@ -537,7 +541,7 @@ export async function backfillStrandedCustomers(
 
       // 6. No existing match but we HAVE identifiers → idempotent upsert.
       //    Use "Clover Customer" fallback name if none, tag "clover pos customer".
-      const firstName = fullName ? fullName.split(" ")[0] : "Clover";
+      const firstName = fullName ? (fullName.split(" ")[0] ?? "Clover") : "Clover";
       const lastName = fullName ? fullName.split(" ").slice(1).join(" ") || "Customer" : "Customer";
 
       const created = await withCrmRateLimitGuard(`backfill-upsert ${c.clover_customer_id}`, () =>
@@ -547,7 +551,6 @@ export async function backfillStrandedCustomers(
           email: email ?? "",
           phone: phone ?? "",
           note: `Backfilled from Clover POS. Clover Customer ID: ${c.clover_customer_id}`,
-          tags: ["clover pos customer"],
         }),
       );
 

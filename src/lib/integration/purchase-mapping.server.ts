@@ -144,12 +144,14 @@ export async function findCustomersByItem(opts: {
       matchedItems = itemRows.filter(
         (i) => normalizeItemName(i.item_name).toLowerCase() === normalized,
       );
-      if (matchedItems.length > 0) {
-        itemName = matchedItems[0].item_name;
-        cloverItemId = matchedItems[0].clover_item_id ?? null;
+      const firstMatch = matchedItems[0];
+      if (firstMatch) {
+        itemName = firstMatch.item_name;
+        cloverItemId = firstMatch.clover_item_id ?? null;
       }
     } else if (matchedItems.length > 0) {
-      itemName = matchedItems[0].item_name;
+      const firstMatch = matchedItems[0];
+      if (firstMatch) itemName = firstMatch.item_name;
     }
   }
 
@@ -389,7 +391,8 @@ export async function tagCustomersByItem(opts: {
 
   for (const [cloverCustomerId, purchases] of byCustomer) {
     const customer = customerRecMap.get(cloverCustomerId);
-    const latest = purchases.sort((a, b) => b.purchaseDate - a.purchaseDate)[0];
+    if (purchases.length === 0) continue;
+    const latest = purchases.sort((a, b) => b.purchaseDate - a.purchaseDate)[0]!;
     const totalQty = purchases.reduce((s, p) => s + p.quantity, 0);
     const totalAmt = purchases.reduce((s, p) => s + p.amountSpentCents, 0);
 

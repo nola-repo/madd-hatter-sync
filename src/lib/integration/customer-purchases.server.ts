@@ -148,7 +148,11 @@ export async function listFilteredCustomersWithPurchases(opts: {
     }
 
     const imap = custItemsMap.get(cid) ?? new Map<string, number>();
-    const itemsPurchased = Array.from(imap.entries()).map(([name, qty]) => ({ name, qty, category: null as string | null }));
+    const itemsPurchased = Array.from(imap.entries()).map(([name, qty]) => ({
+      name,
+      qty,
+      category: null as string | null,
+    }));
 
     return {
       cloverCustomerId: cid,

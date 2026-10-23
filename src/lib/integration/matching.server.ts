@@ -171,32 +171,35 @@ export async function matchCustomer(order: CloverOrder): Promise<CustomerMatchPr
       };
     }
     // overlap exists — unambiguous single contact.
-    if (overlap.length === 1) {
+    const overlapContact = overlap[0];
+    if (overlap.length === 1 && overlapContact) {
       return {
         decision: "matched_existing",
         reason: `Matched existing GHL contact by email + phone.`,
-        ghlContactId: overlap[0].id,
-        candidates: [{ ...overlap[0], matchedBy: "email" }],
+        ghlContactId: overlapContact.id,
+        candidates: [{ ...overlapContact, matchedBy: "email" }],
       };
     }
   }
 
   // Unambiguous single email match.
-  if (emailMatches.length === 1) {
+  const emailContact = emailMatches[0];
+  if (emailMatches.length === 1 && emailContact) {
     return {
       decision: "matched_existing",
       reason: `Matched existing GHL contact by email.`,
-      ghlContactId: emailMatches[0].id,
-      candidates: [{ ...emailMatches[0], matchedBy: "email" }],
+      ghlContactId: emailContact.id,
+      candidates: [{ ...emailContact, matchedBy: "email" }],
     };
   }
   // Unambiguous single phone match.
-  if (phoneMatches.length === 1) {
+  const phoneContact = phoneMatches[0];
+  if (phoneMatches.length === 1 && phoneContact) {
     return {
       decision: "matched_existing",
       reason: `Matched existing GHL contact by phone.`,
-      ghlContactId: phoneMatches[0].id,
-      candidates: [{ ...phoneMatches[0], matchedBy: "phone" }],
+      ghlContactId: phoneContact.id,
+      candidates: [{ ...phoneContact, matchedBy: "phone" }],
     };
   }
   // Multiple matches on the same identifier -> review.
