@@ -72,7 +72,8 @@ export function AudienceBuilderPage() {
     try {
       const cleanOr = orGroups.filter((g) => g.length > 0);
       const res: any = await runFn({ data: { andAudiences, orGroups: cleanOr } });
-      if (typeof res === "string" && (res.includes("<!DOCTYPE") || res.includes("<html"))) {
+      const resStr = typeof res === "string" ? res : null;
+      if (resStr && (resStr.includes("<!DOCTYPE") || resStr.includes("<html"))) {
         setError(
           "Unable to build audience right now. Please refresh and ensure you are signed in.",
         );

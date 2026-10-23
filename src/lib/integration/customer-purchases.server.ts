@@ -128,7 +128,7 @@ export async function listFilteredCustomersWithPurchases(opts: {
   const mapByCid = new Map((mappings ?? []).map((m: any) => [m.clover_customer_id, m]));
 
   const rows: CustomerPurchaseRow[] = customerIds.map((cid) => {
-    const c = custMap.get(cid) ?? {};
+    const c: any = custMap.get(cid) ?? {};
     const spend = custSpendMap.get(cid) ?? { totalSpend: 0, count: 0, lastVisit: 0, orderIds: [] };
     const mapping = mapByCid.get(cid);
 
@@ -148,7 +148,7 @@ export async function listFilteredCustomersWithPurchases(opts: {
     }
 
     const imap = custItemsMap.get(cid) ?? new Map<string, number>();
-    const itemsPurchased = Array.from(imap.entries()).map(([name, qty]) => ({ name, qty }));
+    const itemsPurchased = Array.from(imap.entries()).map(([name, qty]) => ({ name, qty, category: null as string | null }));
 
     return {
       cloverCustomerId: cid,

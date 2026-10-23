@@ -221,22 +221,26 @@ export async function matchCloverCustomerToGhlContact(input: {
     const phoneOnly = phoneMatches.filter((c) => !emailIds.has(c.id));
 
     if (emailOnly.length > 0 && phoneOnly.length > 0) {
-      evidence.conflictEmailContactId = emailOnly[0].id;
-      evidence.conflictPhoneContactId = phoneOnly[0].id;
-      return {
-        status: "CONFLICT",
-        ghlContactId: null,
-        matchMethod: "none",
-        evidence,
-        reason:
-          `Email matches GHL contact ${emailOnly[0].id} but phone matches a different contact ${phoneOnly[0].id}. ` +
-          `Cannot auto-resolve — requires human review.`,
-        confident: false,
-      };
+      const emailContact = emailOnly[0];
+      const phoneContact = phoneOnly[0];
+      if (emailContact && phoneContact) {
+        evidence.conflictEmailContactId = emailContact.id;
+        evidence.conflictPhoneContactId = phoneContact.id;
+        return {
+          status: "CONFLICT",
+          ghlContactId: null,
+          matchMethod: "none",
+          evidence,
+          reason:
+            `Email matches GHL contact ${emailContact.id} but phone matches a different contact ${phoneContact.id}. ` +
+            `Cannot auto-resolve — requires human review.`,
+          confident: false,
+        };
+      }
     }
 
     // Overlap exists — if exactly one contact is in both, that's a strong match.
-    if (overlap.length === 1) {
+    if (overlap.length === 1 && overlap[0]) {
       return {
         status: "MATCHED_EMAIL_PHONE",
         ghlContactId: overlap[0].id,
@@ -260,7 +264,7 @@ export async function matchCloverCustomerToGhlContact(input: {
   }
 
   // RULE C — exact unique email match.
-  if (emailMatches.length === 1) {
+  if (emailMatches.length === 1 && emailMatches[0]) {
     return {
       status: "MATCHED_EMAIL",
       ghlContactId: emailMatches[0].id,
@@ -272,7 +276,7 @@ export async function matchCloverCustomerToGhlContact(input: {
   }
 
   // RULE D — exact unique phone match.
-  if (phoneMatches.length === 1) {
+  if (phoneMatches.length === 1 && phoneMatches[0]) {
     return {
       status: "MATCHED_PHONE",
       ghlContactId: phoneMatches[0].id,

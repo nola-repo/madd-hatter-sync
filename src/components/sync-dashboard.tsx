@@ -20,6 +20,7 @@ import {
   HelpCircle,
   UserX,
   Zap,
+  Clock,
 } from "lucide-react";
 import type {
   ConnectionStatus,
@@ -200,7 +201,7 @@ export function SyncDashboard({ orderId, setOrderId, getStatus, getSchema, previ
         <CardContent>
           <SchemaSection
             schema={schema}
-            {...(status?.ghl?.locationId ? { locationId: status.ghl.locationId } : {})}
+            {...(status?.ghl?.locationId ? { locationId: status.ghl!.locationId! } : {})}
           />
         </CardContent>
         </Card>
@@ -559,7 +560,7 @@ function MatchBadge({ decision, reason }: { decision: string; reason: string }) 
     label: "Held for review",
     icon: <Clock className="h-4 w-4" />,
   };
-  const cfg = map[decision] ?? held;
+  const cfg = (map[decision] ?? held)!;
   return (
     <div className="flex items-start gap-3">
       <Badge variant={cfg.variant} className="gap-1.5">

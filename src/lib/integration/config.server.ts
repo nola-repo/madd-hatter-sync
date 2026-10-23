@@ -32,14 +32,14 @@ export type IntegrationConfig = {
 export function getIntegrationConfig(): IntegrationConfig {
   const missing: string[] = [];
 
-  const cloverMerchantId = (process.env.CLOVER_MERCHANT_ID ?? "").trim();
+  const cloverMerchantId = (process.env["CLOVER_MERCHANT_ID"] ?? "").trim();
   // Support both CLOVER_ACCESS_TOKEN (preferred) and legacy CLOVER_API_KEY
-  const cloverApiKey = (process.env.CLOVER_ACCESS_TOKEN || process.env.CLOVER_API_KEY || "").trim();
-  const ghlLocationId = (process.env.GHL_LOCATION_ID ?? "").trim();
-  const ghlPitToken = (process.env.GHL_PIT_TOKEN ?? "").trim();
-  const supabaseUrl = (process.env.SUPABASE_URL ?? "").trim();
-  const supabaseSecretKey = (process.env.SUPABASE_SECRET_KEY ?? "").trim();
-  const supabasePublishableKey = (process.env.SUPABASE_PUBLISHABLE_KEY ?? "").trim();
+  const cloverApiKey = (process.env["CLOVER_ACCESS_TOKEN"] || process.env["CLOVER_API_KEY"] || "").trim();
+  const ghlLocationId = (process.env["GHL_LOCATION_ID"] ?? "").trim();
+  const ghlPitToken = (process.env["GHL_PIT_TOKEN"] ?? "").trim();
+  const supabaseUrl = (process.env["SUPABASE_URL"] ?? "").trim();
+  const supabaseSecretKey = (process.env["SUPABASE_SECRET_KEY"] ?? "").trim();
+  const supabasePublishableKey = (process.env["SUPABASE_PUBLISHABLE_KEY"] ?? "").trim();
 
   if (!cloverMerchantId) missing.push("CLOVER_MERCHANT_ID");
   if (!cloverApiKey) missing.push("CLOVER_ACCESS_TOKEN");
@@ -62,7 +62,7 @@ export function getIntegrationConfig(): IntegrationConfig {
   // production merchant token). Set CLOVER_ENVIRONMENT=sandbox to use the
   // sandbox REST API host (apisandbox.dev.clover.com) with a sandbox test token.
   const cloverEnv: "sandbox" | "production" =
-    (process.env.CLOVER_ENVIRONMENT ?? "production").toLowerCase() === "sandbox"
+    (process.env["CLOVER_ENVIRONMENT"] ?? "production").toLowerCase() === "sandbox"
       ? "sandbox"
       : "production";
 
@@ -78,7 +78,7 @@ export function getIntegrationConfig(): IntegrationConfig {
       environment: cloverEnv,
       // Optional HMAC secret configured in the Clover webhook dashboard.
       // Read at call time inside the handler; never exposed to the client.
-      webhookSecret: (process.env.CLOVER_WEBHOOK_SECRET ?? "").trim(),
+      webhookSecret: (process.env["CLOVER_WEBHOOK_SECRET"] ?? "").trim(),
     },
     ghl: {
       // GHL REST API base (Lead Connector API v1).
@@ -89,8 +89,8 @@ export function getIntegrationConfig(): IntegrationConfig {
       // Defaults to the object ID from your settings URL (6aad9f812c282b1dfcb1c1b8)
       // or custom_objects.pos_purchase_item.
       purchaseObjectSchemaKey:
-        process.env.GHL_PURCHASE_OBJECT_SCHEMA_KEY ??
-        process.env.GHL_CUSTOM_OBJECT_ID ??
+        process.env["GHL_PURCHASE_OBJECT_SCHEMA_KEY"] ??
+        process.env["GHL_CUSTOM_OBJECT_ID"] ??
         "6aad9f812c282b1dfcb1c1b8",
     },
     supabase: {

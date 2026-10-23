@@ -9,6 +9,7 @@
 // Self-contained (does not import backfill internals) to keep modules focused.
 import { getIntegrationConfig, type IntegrationConfig } from "./config.server";
 import { getSupabaseServer } from "./supabase.server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizeEmail, normalizePhone } from "./matching.server";
 import { searchContactsByEmail, searchContactsByPhone, type GhlContact } from "./ghl.server";
 import { applyPurchaseTag, purchaseTagLabel, normalizeItemName } from "./ghl-tags.server";
@@ -182,7 +183,7 @@ export async function autoResolveAmbiguous(
 
     const phoneIds = new Set(phoneMatches.map((m) => m.id));
     const overlap = emailMatches.filter((m) => phoneIds.has(m.id));
-    if (overlap.length === 1) {
+    if (overlap.length === 1 && overlap[0]) {
       const ghlContactId = overlap[0].id;
       await persistMapping(cid, ghlContactId, "email_phone", email, phone);
       out.matchedExisting += 1;

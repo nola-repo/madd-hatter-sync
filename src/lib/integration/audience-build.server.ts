@@ -70,8 +70,9 @@ export async function buildAudience(
   for (const [id, s] of sets) audienceSizes[id] = s.size;
 
   let result: Set<string>;
-  if (andAudiences.length > 0 && andAudiences[0]) {
-    result = new Set(sets.get(andAudiences[0]) ?? []);
+  const firstAnd = andAudiences[0];
+  if (andAudiences.length > 0 && firstAnd) {
+    result = new Set(sets.get(firstAnd) ?? []);
     for (let i = 1; i < andAudiences.length; i++) {
       const audienceId = andAudiences[i];
       if (!audienceId) continue;

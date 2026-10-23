@@ -16,7 +16,7 @@ class GhlApiError extends Error {
   }
 }
 
-async function ghlFetch(
+export async function ghlFetch(
   path: string,
   init: RequestInit = {},
   version: string = "2021-07-28",

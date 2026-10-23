@@ -331,7 +331,7 @@ export async function checkCloverConnection(): Promise<CloverConnectionDetail> {
       Accept: "application/json",
     };
     if (!useParam) {
-      headers.Authorization = `Bearer ${token}`;
+      headers["Authorization"] = `Bearer ${token}`;
     }
     const res = await fetch(url, { headers });
     const text = await res.text();

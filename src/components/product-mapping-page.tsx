@@ -24,7 +24,7 @@ const CATEGORY_STYLE: Record<string, { bg: string; color: string }> = {
   tequila: { bg: "#fef3c7", color: "#d97706" },
 };
 
-function getCatStyle(cat: string | null) {
+function getCatStyle(cat: string | null): { bg: string; color: string } {
   const def = CATEGORY_STYLE["default"] ?? { bg: "#f1f5f9", color: "#475569" };
   if (!cat) return def;
   const l = cat.toLowerCase();

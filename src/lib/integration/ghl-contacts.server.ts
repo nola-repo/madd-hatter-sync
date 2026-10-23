@@ -5,7 +5,7 @@
 // IMPORTANT: Uses the official Upsert Contact endpoint so GHL deduplicates on
 // email/phone based on the subaccount's "Allow Duplicate Contact" settings.
 import { getIntegrationConfig } from "./config.server";
-import { ghlRequest } from "./ghl.server";
+import { ghlFetch } from "./ghl.server";
 
 export type GhlContact = {
   id: string;

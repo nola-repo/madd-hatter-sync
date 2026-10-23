@@ -30,8 +30,9 @@ export function SettingsPage() {
     setSetupRequired(null);
     try {
       const res = await getStatusFn();
-      if (res && "setupRequired" in res && res.setupRequired) {
-        setSetupRequired((res as any).missing);
+      const r = res as any;
+      if (r && r.setupRequired) {
+        setSetupRequired(r.missing);
       } else {
         setStatus(res as ConnectionStatus);
       }
@@ -45,7 +46,7 @@ export function SettingsPage() {
   const loadSchema = useCallback(async () => {
     try {
       const res = await getSchemaFn();
-      if (!res?.setupRequired) setSchema(res);
+      if (!(res as any)?.setupRequired) setSchema(res);
     } catch {
       /* schema optional */
     }
@@ -139,7 +140,7 @@ export function SettingsPage() {
           <CardContent>
             <SchemaSection
               schema={schema}
-              {...(status?.ghl?.locationId ? { locationId: status.ghl.locationId } : {})}
+              {...(status?.ghl?.locationId ? { locationId: status.ghl!.locationId! } : {})}
             />
           </CardContent>
         </Card>

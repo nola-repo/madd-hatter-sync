@@ -306,7 +306,7 @@ export async function backfillStrandedCustomers(
 
   // Dynamic batch limit: explicit arg → env → default 25.
   const resolvedLimit =
-    limit ?? (process.env.SYNC_BATCH_LIMIT ? parseInt(process.env.SYNC_BATCH_LIMIT, 10) : 25);
+    limit ?? (process.env["SYNC_BATCH_LIMIT"] ? parseInt(process.env["SYNC_BATCH_LIMIT"], 10) : 25);
   const batchLimit = Math.min(100, Math.max(1, resolvedLimit));
 
   // Find customers WITH a usable email OR phone but WITHOUT a mapping.
@@ -390,6 +390,7 @@ export async function backfillStrandedCustomers(
     }
 
     const c = stranded[i];
+    if (!c) continue;
     out.attempted += 1;
 
     const email = normalizeEmail(c.email);

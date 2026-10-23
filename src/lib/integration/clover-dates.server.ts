@@ -22,7 +22,7 @@ export type DateRange = {
  * picks up the env value at call time inside a server boundary.
  */
 function merchantTimezone(): string {
-  return process.env.CLOVER_TIMEZONE ?? "America/New_York";
+  return process.env["CLOVER_TIMEZONE"] ?? "America/New_York";
 }
 
 /**
@@ -177,8 +177,14 @@ export function isoToRange(startDate?: string, endDate?: string): DateRange {
  * includes purchases throughout October 13, not only at midnight.
  */
 export function customDateRange(startDate: string, endDate: string): DateRange {
-  const [sy, sm, sd] = startDate.split("-").map(Number);
-  const [ey, em, ed] = endDate.split("-").map(Number);
+  const sParts = startDate.split("-").map(Number);
+  const eParts = endDate.split("-").map(Number);
+  const sy = sParts[0] ?? 2024;
+  const sm = sParts[1] ?? 1;
+  const sd = sParts[2] ?? 1;
+  const ey = eParts[0] ?? 2024;
+  const em = eParts[1] ?? 1;
+  const ed = eParts[2] ?? 1;
   const startWall = new Date(Date.UTC(sy, sm - 1, sd, 0, 0, 0, 0));
   const endWall = new Date(Date.UTC(ey, em - 1, ed, 23, 59, 59, 999));
   return {

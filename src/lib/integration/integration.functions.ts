@@ -88,7 +88,7 @@ export const testSupabaseConnection = createServerFn({ method: "GET" }).handler(
         result.detail = `Secret key check failed: ${error.message}`;
       } else {
         result.secretKeyOk = true;
-        result.adminUserCount = data?.audits?.length ?? data?.users?.length ?? 0;
+        result.adminUserCount = data?.["audits"]?.length ?? data?.users?.length ?? 0;
       }
     } catch (e: any) {
       result.detail = `Secret key check error: ${e?.message ?? "unknown"}`;
@@ -263,8 +263,8 @@ export const getOrdersList = createServerFn({ method: "GET" })
     await requireAdmin();
     try {
       const res = await listOrders({
-        search: data.search,
-        paymentStatus: data.paymentStatus,
+        ...(data.search ? { search: data.search } : {}),
+        ...(data.paymentStatus ? { paymentStatus: data.paymentStatus } : {}),
         limit: data.limit,
         offset: data.offset,
       });

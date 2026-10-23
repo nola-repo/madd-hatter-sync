@@ -548,7 +548,6 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
     errors,
     startedAt: run.started_at,
     finishedAt: new Date().toISOString(),
-    reconciliation: recon,
   };
 }
 
@@ -595,7 +594,7 @@ export async function runCrmSync(limit?: number): Promise<CrmSyncSummary> {
   // Dynamic batch limit: prefer the explicit arg, then SYNC_BATCH_LIMIT env,
   // then default 10. Caps at 100 to stay within cron-job.org's 30s window.
   const resolvedLimit =
-    limit ?? (process.env.SYNC_BATCH_LIMIT ? parseInt(process.env.SYNC_BATCH_LIMIT, 10) : 10);
+    limit ?? (process.env["SYNC_BATCH_LIMIT"] ? parseInt(process.env["SYNC_BATCH_LIMIT"], 10) : 10);
   const batchLimit = Math.min(100, Math.max(1, resolvedLimit));
 
   // 1. Pre-fetch schema once for the entire batch.

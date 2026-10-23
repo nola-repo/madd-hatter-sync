@@ -19,8 +19,8 @@ export type SendEmailResult =
 const RESEND_API_URL = "https://api.resend.com/emails";
 
 export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
-  const apiKey = (process.env.RESEND_API_KEY ?? "").trim();
-  const fromAddress = (process.env.EMAIL_FROM_ADDRESS ?? "onboarding@resend.dev").trim();
+  const apiKey = (process.env["RESEND_API_KEY"] ?? "").trim();
+  const fromAddress = (process.env["EMAIL_FROM_ADDRESS"] ?? "onboarding@resend.dev").trim();
 
   if (!apiKey) {
     console.warn("[email] RESEND_API_KEY not set — skipping send to", input.to);
