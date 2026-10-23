@@ -47,7 +47,7 @@ export const Route = createFileRoute("/api/sync")({
         const step = url.searchParams.get("step"); // "fetch" | "push" | null (both)
 
         // Validate the shared cron secret (read inside the handler).
-        const expectedSecret = (process.env.SYNC_SECRET ?? "").trim();
+        const expectedSecret = (process.env["SYNC_SECRET"] ?? "").trim();
         if (!expectedSecret) {
           console.error("[sync] SYNC_SECRET is not configured. Set it in Secrets.");
           return Response.json(
@@ -70,8 +70,8 @@ export const Route = createFileRoute("/api/sync")({
         );
 
         // Dynamic batch limit: env SYNC_BATCH_LIMIT (up to 100) for backfill ramp-up.
-        const envBatch = process.env.SYNC_BATCH_LIMIT
-          ? parseInt(process.env.SYNC_BATCH_LIMIT, 10)
+        const envBatch = process.env["SYNC_BATCH_LIMIT"]
+          ? parseInt(process.env["SYNC_BATCH_LIMIT"], 10)
           : 10;
         const batchLimit = Math.min(
           100,
@@ -84,7 +84,8 @@ export const Route = createFileRoute("/api/sync")({
           if (step === "fetch") {
             // Step A: bounded Clover pull to stay well within 30s timeout
             const result = await stepFetch(rangeParam);
-            return Response.json({ ok: true, step: "fetch", range: rangeParam, ...result });
+            // Note: result already contains { range }; do not duplicate it.
+            return Response.json({ ok: true, step: "fetch", ...result });
           }
 
           if (step === "push") {

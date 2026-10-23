@@ -93,16 +93,16 @@ export function resolveAudience(id: AudienceId, customers: CustomerAgg[]): Set<s
 
       // ---- Spending / loyalty / lifecycle (15-28) ----
       case "single_check_250":
-        match = c.orders.some((o) => (o.total_cents || 0) > 25000);
+        match = c.orders.some((o) => (o.total_cents || 0) >= 25000);
         break;
       case "single_check_500":
-        match = c.orders.some((o) => (o.total_cents || 0) > 50000);
+        match = c.orders.some((o) => (o.total_cents || 0) >= 50000);
         break;
       case "single_check_750":
-        match = c.orders.some((o) => (o.total_cents || 0) > 75000);
+        match = c.orders.some((o) => (o.total_cents || 0) >= 75000);
         break;
       case "single_check_1000":
-        match = c.orders.some((o) => (o.total_cents || 0) > 100000);
+        match = c.orders.some((o) => (o.total_cents || 0) >= 100000);
         break;
       case "visits_2_plus_month":
         match = Array.from(c.visitsByMonth.values()).some((v) => v >= 2);
@@ -120,10 +120,10 @@ export function resolveAudience(id: AudienceId, customers: CustomerAgg[]): Set<s
         match = c.lastVisit > 0 && now - c.lastVisit > 90 * 86400000;
         break;
       case "lifetime_2500":
-        match = c.lifetimeSpend > 250000;
+        match = c.lifetimeSpend >= 250000;
         break;
       case "lifetime_5000":
-        match = c.lifetimeSpend > 500000;
+        match = c.lifetimeSpend >= 500000;
         break;
       case "weekday_check_100":
         match = c.orders.some((o) => {

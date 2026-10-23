@@ -76,10 +76,10 @@ export const listManagedUsers = createServerFn({ method: "GET" }).handler(async 
       for (const u of batch) {
         users.push({
           id: u.id,
-          email: u.email,
-          created_at: u.created_at,
-          last_sign_in_at: u.last_sign_in_at,
-          user_metadata: u.user_metadata,
+          email: u.email ?? undefined,
+          created_at: u.created_at ?? undefined,
+          last_sign_in_at: u.last_sign_in_at ?? undefined,
+          user_metadata: u.user_metadata ?? undefined,
         });
       }
       if (batch.length < 1000) break;
@@ -105,7 +105,7 @@ export const listManagedUsers = createServerFn({ method: "GET" }).handler(async 
       return {
         userId: u.id,
         email: u.email ?? "",
-        fullName: (u.user_metadata?.full_name as string | undefined) ?? null,
+        fullName: (u.user_metadata?.["full_name"] as string | undefined) ?? null,
         createdAt: u.created_at ?? null,
         lastSignInAt: u.last_sign_in_at ?? null,
         approved: entry?.approved ?? false,
@@ -147,7 +147,7 @@ export const setUserApproval = createServerFn({ method: "POST" })
       // consistent and we can send the approval email.
       const u = await sb.auth.admin.getUserById(data.userId);
       const email = u.data?.user?.email ?? "";
-      const fullName = (u.data?.user?.user_metadata?.full_name as string | undefined) ?? "";
+      const fullName = (u.data?.user?.user_metadata?.["full_name"] as string | undefined) ?? "";
       const { error } = await sb.from("admin_users").upsert(
         {
           user_id: data.userId,
