@@ -19,12 +19,17 @@ function escapeCsv(value: string | null | undefined): string {
   if (FORMULA_INJECTION_PREFIXES.test(str)) {
     str = "\t" + str;
   }
-  if (str.includes(",") || str.includes('"') || str.includes("\n") || str.includes("\r") || str.includes("\t")) {
+  if (
+    str.includes(",") ||
+    str.includes('"') ||
+    str.includes("\n") ||
+    str.includes("\r") ||
+    str.includes("\t")
+  ) {
     return `"${str.replace(/"/g, '""')}"`;
   }
   return str;
 }
-
 
 export function toCsv(
   rows: Record<string, string | number | null | undefined>[],

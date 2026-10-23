@@ -42,7 +42,11 @@ async function handleBackfill(request: Request): Promise<Response> {
   const url = new URL(request.url);
 
   // Validate the shared cron secret (read inside the handler for CF Workers).
-  const expectedSecret = (process.env["SYNC_BACKFILL_SECRET"] ?? process.env["SYNC_SECRET"] ?? "").trim();
+  const expectedSecret = (
+    process.env["SYNC_BACKFILL_SECRET"] ??
+    process.env["SYNC_SECRET"] ??
+    ""
+  ).trim();
   if (!expectedSecret) {
     console.error("[backfill] SYNC_SECRET is not configured. Set it in Secrets.");
     return Response.json(

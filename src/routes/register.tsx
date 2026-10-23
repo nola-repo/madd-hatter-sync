@@ -62,7 +62,8 @@ function RegisterPage() {
     const errs: Record<string, string> = {};
     if (!fullName.trim()) errs["fullName"] = "Full name is required.";
     if (!email.trim()) errs["email"] = "Email is required.";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) errs["email"] = "Enter a valid email.";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()))
+      errs["email"] = "Enter a valid email.";
     if (!password) errs["password"] = "Password is required.";
     else if (password.length < 8) errs["password"] = "Password must be at least 8 characters.";
     if (confirm !== password) errs["confirm"] = "Passwords do not match.";
@@ -222,7 +223,9 @@ function RegisterPage() {
               className="clay-inset h-12 border-0 px-5 text-base placeholder:text-[var(--clay-muted)] focus-visible:ring-2 focus-visible:ring-[var(--clay-primary)]/40"
               style={{ color: "var(--clay-text)" }}
             />
-            {fieldErrors["email"] && <p className="text-xs text-destructive">{fieldErrors["email"]}</p>}
+            {fieldErrors["email"] && (
+              <p className="text-xs text-destructive">{fieldErrors["email"]}</p>
+            )}
           </div>
 
           <div className="space-y-2">

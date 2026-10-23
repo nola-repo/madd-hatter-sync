@@ -93,7 +93,9 @@ export async function withRateLimit<T>(
             status: s2,
             delayMs: 0,
             attempt: 1,
-            ...(ctx.cloverCustomerId !== undefined ? { cloverCustomerId: ctx.cloverCustomerId } : {}),
+            ...(ctx.cloverCustomerId !== undefined
+              ? { cloverCustomerId: ctx.cloverCustomerId }
+              : {}),
             error:
               typeof e2?.body === "string"
                 ? e2.body.slice(0, 200)
