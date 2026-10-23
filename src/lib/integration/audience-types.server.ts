@@ -51,6 +51,11 @@ export type AudienceMeta = {
   label: string;
   group: string;
   description: string;
+  /** When true, this audience has no active data source and will always
+   *  return 0 members. The UI should display an 'unavailable' badge.
+   *  Set `unavailableReason` to explain what is needed to enable it. */
+  unavailable?: true;
+  unavailableReason?: string;
 };
 
 export const AUDIENCES: AudienceMeta[] = [
@@ -257,60 +262,80 @@ export const AUDIENCES: AudienceMeta[] = [
     label: "Birthday — October",
     group: "Birthday",
     description: "Birthdays Oct 1–31.",
+    unavailable: true,
+    unavailableReason: "Birthday data not yet ingested from Clover. All matches return 0.",
   },
   {
     id: "birthday_nov",
     label: "Birthday — November",
     group: "Birthday",
     description: "Birthdays Nov 1–30.",
+    unavailable: true,
+    unavailableReason: "Birthday data not yet ingested from Clover. All matches return 0.",
   },
   {
     id: "birthday_dec",
     label: "Birthday — December",
     group: "Birthday",
     description: "Birthdays Dec 1–31.",
+    unavailable: true,
+    unavailableReason: "Birthday data not yet ingested from Clover. All matches return 0.",
   },
   {
     id: "birthday_jan",
     label: "Birthday — January",
     group: "Birthday",
     description: "Birthdays Jan 1–31.",
+    unavailable: true,
+    unavailableReason: "Birthday data not yet ingested from Clover. All matches return 0.",
   },
   {
     id: "birthday_feb",
     label: "Birthday — February",
     group: "Birthday",
     description: "Birthdays Feb 1–29 (leap-day handled).",
+    unavailable: true,
+    unavailableReason: "Birthday data not yet ingested from Clover. All matches return 0.",
   },
   {
     id: "birthday_mar",
     label: "Birthday — March",
     group: "Birthday",
     description: "Birthdays Mar 1–31.",
+    unavailable: true,
+    unavailableReason: "Birthday data not yet ingested from Clover. All matches return 0.",
   },
   {
     id: "birthday_apr",
     label: "Birthday — April",
     group: "Birthday",
     description: "Birthdays Apr 1–30.",
+    unavailable: true,
+    unavailableReason: "Birthday data not yet ingested from Clover. All matches return 0.",
   },
   {
     id: "birthday_may",
     label: "Birthday — May",
     group: "Birthday",
     description: "Birthdays May 1–31.",
+    unavailable: true,
+    unavailableReason: "Birthday data not yet ingested from Clover. All matches return 0.",
   },
   {
     id: "birthday_jun",
     label: "Birthday — June",
     group: "Birthday",
     description: "Birthdays Jun 1–30.",
+    unavailable: true,
+    unavailableReason: "Birthday data not yet ingested from Clover. All matches return 0.",
   },
   {
     id: "birthday_jul",
     label: "Birthday — July",
     group: "Birthday",
     description: "Birthdays Jul 1–31.",
+    unavailable: true,
+    unavailableReason: "Birthday data not yet ingested from Clover. All matches return 0.",
   },
 ];
 

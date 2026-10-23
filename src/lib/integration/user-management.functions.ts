@@ -62,10 +62,10 @@ export const listManagedUsers = createServerFn({ method: "GET" }).handler(async 
     // Pull every auth user (admin API). listUsers returns up to 1000 per page.
     const users: Array<{
       id: string;
-      email?: string;
-      created_at?: string;
-      last_sign_in_at?: string;
-      user_metadata?: Record<string, unknown>;
+      email: string | undefined;
+      created_at: string | undefined;
+      last_sign_in_at: string | undefined;
+      user_metadata: Record<string, unknown> | undefined;
     }> = [];
     let page = 1;
     // eslint-disable-next-line no-constant-condition

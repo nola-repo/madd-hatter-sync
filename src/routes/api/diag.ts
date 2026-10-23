@@ -44,7 +44,7 @@ export const Route = createFileRoute("/api/diag")({
           });
           const locText = await locRes.text();
 
-          const syncSecret = (process.env.SYNC_SECRET ?? "").trim();
+          const syncSecret = (process.env["SYNC_SECRET"] ?? "").trim();
           const syncSecretDiag = {
             configured: Boolean(syncSecret),
             length: syncSecret.length,

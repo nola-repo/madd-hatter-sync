@@ -103,29 +103,64 @@ export async function loadAggregates(): Promise<{
 
   const [orders, items] = await Promise.all([fetchAllOrders(mid), fetchAllItems(mid)]);
 
-  const { data: custRows, error: cErr } = await sb
-    .from("customers")
-    .select("clover_customer_id,first_name,last_name,email,phone,marketing_allowed,created_at")
-    .eq("clover_merchant_id", mid);
-  if (cErr) {
-    console.warn("Audience: customers query warning:", cErr.message);
+  // Paginate customers to avoid PostgREST's 1000-row default cap (DEF-011).
+  const custRows: Array<{
+    clover_customer_id: string;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    phone: string | null;
+    marketing_allowed: boolean | null;
+    created_at: string;
+  }> = [];
+  {
+    let off = 0;
+    for (;;) {
+      const { data, error } = await sb
+        .from("customers")
+        .select("clover_customer_id,first_name,last_name,email,phone,marketing_allowed,created_at")
+        .eq("clover_merchant_id", mid)
+        .range(off, off + PAGE - 1);
+      if (error) {
+        console.warn("Audience: customers query warning:", error.message);
+        break;
+      }
+      custRows.push(...(data ?? []));
+      if (!data || data.length < PAGE) break;
+      off += PAGE;
+    }
   }
 
-  // Gracefully query customer_mappings — if columns differ across schema versions, fallback safely
+  // Paginate customer_mappings — same reason (DEF-011).
   let mapRows: Array<{
     clover_customer_id: string;
     ghl_contact_id: string | null;
     matched_by?: string | null;
   }> | null = null;
-  const { data: mData, error: mErr } = await sb
-    .from("customer_mappings")
-    .select("clover_customer_id,ghl_contact_id")
-    .eq("clover_merchant_id", mid);
-
-  if (mErr) {
-    console.warn("Audience: customer_mappings query warning:", mErr.message);
-  } else {
-    mapRows = mData;
+  {
+    const allMap: Array<{
+      clover_customer_id: string;
+      ghl_contact_id: string | null;
+      matched_by?: string | null;
+    }> = [];
+    let off = 0;
+    let ok = true;
+    for (;;) {
+      const { data: mData, error: mErr } = await sb
+        .from("customer_mappings")
+        .select("clover_customer_id,ghl_contact_id")
+        .eq("clover_merchant_id", mid)
+        .range(off, off + PAGE - 1);
+      if (mErr) {
+        console.warn("Audience: customer_mappings query warning:", mErr.message);
+        ok = false;
+        break;
+      }
+      allMap.push(...(mData ?? []));
+      if (!mData || mData.length < PAGE) break;
+      off += PAGE;
+    }
+    if (ok) mapRows = allMap;
   }
 
   const custMap = new Map((custRows ?? []).map((c) => [c.clover_customer_id, c]));

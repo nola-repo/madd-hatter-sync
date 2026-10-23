@@ -146,6 +146,9 @@ export type SyncRunSummary = {
   kind: string;
   rangeStart: number | null;
   rangeEnd: number | null;
+  /** True when an incremental cron fetch hit its 1-page cap (50 orders).
+   *  More orders may exist on Clover that were not fetched this tick. */
+  hasMore?: boolean;
   ordersFetched: number;
   ordersUpserted: number;
   orderItemsFetched: number;
@@ -544,6 +547,11 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
     kind,
     rangeStart: range.startMs ?? null,
     rangeEnd: range.endMs ?? null,
+    // hasMore: true when an incremental fetch hit the page cap (1 page = 50
+    // orders). Signals that more Clover orders may not yet be ingested for
+    // this tick. The cron caller should surface this as a backlog indicator
+    // so operators know to check sync frequency (DEF-009).
+    hasMore: kind === "incremental" && recon.pagesFetched >= 1 && counters.ordersFetched >= 50,
     ...counters,
     errors,
     startedAt: run.started_at,

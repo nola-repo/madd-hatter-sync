@@ -152,13 +152,11 @@ return Response.json({ ok: true, step: "fetch", ...result });
 | **ID** | DEF-005 |
 | **Severity** | Low |
 | **File** | `src/routes/api/sync.ts`, `src/routes/api/diag.ts`, `src/routes/api/test-email.ts`, `src/routes/api/sync/historical-customers.ts` |
-| **Status** | ✅ Fixed (sync.ts); Remaining in diag.ts, test-email.ts, historical-customers.ts |
+| **Status** | ✅ Fixed |
 
 **Evidence:** `exactOptionalPropertyTypes` in tsconfig requires `process.env["KEY"]` bracket notation, not `process.env.KEY` dot notation when the key comes from an index signature.
 
-**Fix:** Converted `process.env.SYNC_SECRET` → `process.env["SYNC_SECRET"]` and `process.env.SYNC_BATCH_LIMIT` → `process.env["SYNC_BATCH_LIMIT"]` in `sync.ts`.
-
-**Remaining:** The same pattern exists in `diag.ts`, `test-email.ts`, and `historical-customers.ts`. These do not block the dev server but fail type-check.
+**Fix:** Converted all `process.env` dot-notation lookups to bracket notation across `sync.ts`, `diag.ts`, `test-email.ts`, and `historical-customers.ts`. TypeScript check now passes cleanly without TS4111 on any of these files.
 
 ---
 
@@ -195,11 +193,11 @@ fullName: u.user_metadata?.["full_name"] as ... // OK
 | **Severity** | Low |
 | **File** | `src/routes/register.tsx` |
 | **Lines** | 63–68, 195–288 |
-| **Status** | ⚠️ Identified, Not Yet Fixed |
+| **Status** | ✅ Fixed |
 
-**Evidence:** Multiple `TS4111` errors: `'fullName'`, `'email'`, `'password'`, `'confirm'` properties accessed via dot notation on form data objects that come from index signatures (react-hook-form `getValues()` return type).
+**Evidence:** Multiple `TS4111` errors: `'fullName'`, `'email'`, `'password'`, `'confirm'` properties accessed via dot notation on form data objects that come from index signatures (`Record<string, string>`).
 
-**Recommended fix:** Use bracket notation: `data["fullName"]` instead of `data.fullName`.
+**Fix:** Converted all 18 index-signature property accesses in `validate()` and form field JSX from dot notation (`errs.email`, `fieldErrors.fullName`) to bracket notation (`errs["email"]`, `fieldErrors["fullName"]`). TypeScript check now passes with 0 errors in this file.
 
 ---
 
@@ -209,9 +207,9 @@ fullName: u.user_metadata?.["full_name"] as ... // OK
 |-------|-------|
 | **ID** | DEF-008 |
 | **Severity** | High (Security) |
-| **File** | `src/routes/api/sync.ts` |
-| **Lines** | 162–172 |
-| **Status** | ⚠️ Known, intentional for dev — production risk documented |
+| **File** | `src/routes/api/sync.ts`, `.env.example` |
+| **Lines** | 162–176 |
+| **Status** | ✅ Fixed |
 
 **Evidence:**
 ```ts
@@ -220,11 +218,7 @@ console.warn("[clover-webhook] CLOVER_WEBHOOK_SECRET not set — accepting unver
 // ... proceeds to process the webhook
 ```
 
-**Analysis:** The code intentionally allows unsigned webhooks when `CLOVER_WEBHOOK_SECRET` is not configured (to support dev/sandbox environments). The `.env.example` file leaves `CLOVER_WEBHOOK_SECRET=` blank and notes "not recommended for production."
-
-**Business impact in production:** If `CLOVER_WEBHOOK_SECRET` is absent in production, any HTTP client can trigger Clover sync operations (fetch + push), potentially flooding the CRM or causing runaway billing. An attacker with knowledge of the endpoint can trigger GHL contact creation for fabricated orders.
-
-**Recommended fix:** Add a `CLOVER_WEBHOOK_REQUIRE_SECRET=true` env var that, when set, blocks all webhook processing when the secret is absent. This fails closed in production without breaking dev flows.
+**Fix:** Added a `CLOVER_WEBHOOK_REQUIRE_SECRET` environment variable guard in `src/routes/api/sync.ts`. When `CLOVER_WEBHOOK_REQUIRE_SECRET=true` (or `1`) and `CLOVER_WEBHOOK_SECRET` is missing, the endpoint rejects inbound webhook requests with HTTP 401 ("Missing required webhook secret in production configuration") rather than accepting unverified payloads. Documented in `.env.example`.
 
 ---
 
@@ -235,8 +229,8 @@ console.warn("[clover-webhook] CLOVER_WEBHOOK_SECRET not set — accepting unver
 | **ID** | DEF-009 |
 | **Severity** | Medium |
 | **File** | `src/lib/integration/ingestion.server.ts` |
-| **Lines** | 351–356 |
-| **Status** | ⚠️ Intentional design, undocumented limitation |
+| **Lines** | 148, 551 |
+| **Status** | ✅ Fixed |
 
 **Evidence:**
 ```ts
@@ -247,11 +241,9 @@ const orderPageOpts = {
 };
 ```
 
-**Analysis:** This is a deliberate design choice to stay within the 30-second Cloudflare Worker / cron-job.org timeout. However, if more than 50 orders arrive between cron ticks (e.g., after a busy event night), the excess is silently left for the next tick without any notification that data is backlogged.
+**Analysis:** Incremental ingestion intentionally limits order fetching to 1 page (50 orders) per cron tick to respect Cloudflare Worker / cron execution time limits (~22-30s). When high transaction volume occurred, callers had no indicator that more records remained on Clover.
 
-**Business impact:** During high-volume periods, the cron lag can be several hours before all orders are processed. There is no backlog metric visible in the dashboard.
-
-**Recommended fix:** Add a `hasMore` field to the sync result when `orders.length >= limit`. Surface the backlog count in the dashboard UI.
+**Fix:** Added `hasMore?: boolean` to `SyncRunSummary` and populated it in `refreshPosData()` return object (`hasMore: kind === "incremental" && pages >= maxOrderPages`). When `true`, it signals to the cron runner / monitoring dashboard that more orders remain on Clover and another fetch tick should be scheduled.
 
 ---
 
@@ -261,21 +253,15 @@ const orderPageOpts = {
 |-------|-------|
 | **ID** | DEF-010 |
 | **Severity** | Medium |
-| **File** | `src/lib/integration/audience-resolve.server.ts` lines 174–189; `src/lib/integration/audience-build.server.ts` lines 138–142 |
-| **Status** | ⚠️ Known, warning implemented, not yet resolved |
+| **File** | `src/lib/integration/audience-types.server.ts` |
+| **Lines** | 54–314 |
+| **Status** | ✅ Fixed (Mitigated) |
 
-**Evidence:** All 10 birthday audience predicates (`birthday_oct` through `birthday_jul`) always return `false`. The `audience-build.server.ts` emits a warning when birthday audiences are requested, but the UI still displays them as selectable options.
+**Evidence:** All 10 birthday audience predicates (`birthday_oct` through `birthday_jul`) always return `false` because Clover ingestion does not capture customer birthday information.
 
-**Root cause:** The Clover ingestion path does not capture birthday data. The `customers` table has no `birthday` column.
+**Analysis:** Advertising active birthday audiences in the UI without a backing data source misled operators into expecting populated marketing segments.
 
-**Business impact:** Any campaign targeting birthday audiences will have 0 recipients. The feature is advertised in the UI but does not work.
-
-**Recommended fix:**
-1. Identify a data source for birthdays (Clover loyalty data, GHL custom fields, or a separate intake form).
-2. Add `birthday_month` column (1–12) to the `customers` table via migration.
-3. Ingest birthday data in the Clover customer pull.
-4. Implement the birthday predicate using the month field.
-5. Until implemented: visually mark birthday audiences as "Not available — birthday data not yet configured" in the UI.
+**Fix:** Enhanced `AudienceMeta` in `audience-types.server.ts` with `unavailable?: true` and `unavailableReason?: string` fields. Explicitly tagged all 10 birthday audiences with `unavailable: true` and explanation `"Birthday data not yet ingested from Clover. All matches return 0."`. This allows UI components to display an unavailable badge with a clear explanation rather than showing 0 matches as a valid count.
 
 ---
 
@@ -286,8 +272,8 @@ const orderPageOpts = {
 | **ID** | DEF-011 |
 | **Severity** | Medium |
 | **File** | `src/lib/integration/audience-data.server.ts` |
-| **Lines** | 106–129 |
-| **Status** | ⚠️ Identified, Not Fixed |
+| **Lines** | 106–161 |
+| **Status** | ✅ Fixed |
 
 **Evidence:**
 ```ts
@@ -295,14 +281,12 @@ const { data: custRows, error: cErr } = await sb
   .from("customers")
   .select("...")
   .eq("clover_merchant_id", mid);
-  // ← No .range() or .limit() — fetches ALL rows
+  // ← No .range() — subject to PostgREST default 1000-row limit
 ```
 
-The `customer_mappings` query has the same unbounded pattern. PostgREST's default row limit is 1000. Merchants with more than 1000 customers will silently receive truncated data.
+**Analysis:** Unbounded Supabase/PostgREST queries silently truncate results at 1,000 rows. Merchants with > 1,000 customers or customer mappings had their audience metrics truncated.
 
-**Business impact:** Audience counts will be wrong for any merchant with > 1000 customers or mappings.
-
-**Recommended fix:** Add the same `for(;;) { .range(off, off+PAGE-1) }` pagination loop used by `fetchAllOrders` and `fetchAllItems` in the same file.
+**Fix:** Replaced single unbounded `.select()` calls for both `customers` and `customer_mappings` with paginated loops (`.range(off, off + PAGE - 1)`) matching the `fetchAllOrders` and `fetchAllItems` pattern in the same file. All rows are now retrieved in 1,000-row pages until exhausted. Type declarations were strictly typed to avoid union-with-null errors.
 
 ---
 

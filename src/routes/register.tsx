@@ -60,12 +60,12 @@ function RegisterPage() {
 
   function validate(): boolean {
     const errs: Record<string, string> = {};
-    if (!fullName.trim()) errs.fullName = "Full name is required.";
-    if (!email.trim()) errs.email = "Email is required.";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) errs.email = "Enter a valid email.";
-    if (!password) errs.password = "Password is required.";
-    else if (password.length < 8) errs.password = "Password must be at least 8 characters.";
-    if (confirm !== password) errs.confirm = "Passwords do not match.";
+    if (!fullName.trim()) errs["fullName"] = "Full name is required.";
+    if (!email.trim()) errs["email"] = "Email is required.";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) errs["email"] = "Enter a valid email.";
+    if (!password) errs["password"] = "Password is required.";
+    else if (password.length < 8) errs["password"] = "Password must be at least 8 characters.";
+    if (confirm !== password) errs["confirm"] = "Passwords do not match.";
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -192,13 +192,13 @@ function RegisterPage() {
               onChange={(e) => setFullName(e.target.value)}
               required
               autoComplete="name"
-              aria-invalid={!!fieldErrors.fullName}
+              aria-invalid={!!fieldErrors["fullName"]}
               placeholder="Jane Doe"
               className="clay-inset h-12 border-0 px-5 text-base placeholder:text-[var(--clay-muted)] focus-visible:ring-2 focus-visible:ring-[var(--clay-primary)]/40"
               style={{ color: "var(--clay-text)" }}
             />
-            {fieldErrors.fullName && (
-              <p className="text-xs text-destructive">{fieldErrors.fullName}</p>
+            {fieldErrors["fullName"] && (
+              <p className="text-xs text-destructive">{fieldErrors["fullName"]}</p>
             )}
           </div>
 
@@ -217,12 +217,12 @@ function RegisterPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
-              aria-invalid={!!fieldErrors.email}
+              aria-invalid={!!fieldErrors["email"]}
               placeholder="you@example.com"
               className="clay-inset h-12 border-0 px-5 text-base placeholder:text-[var(--clay-muted)] focus-visible:ring-2 focus-visible:ring-[var(--clay-primary)]/40"
               style={{ color: "var(--clay-text)" }}
             />
-            {fieldErrors.email && <p className="text-xs text-destructive">{fieldErrors.email}</p>}
+            {fieldErrors["email"] && <p className="text-xs text-destructive">{fieldErrors["email"]}</p>}
           </div>
 
           <div className="space-y-2">
@@ -241,7 +241,7 @@ function RegisterPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 autoComplete="new-password"
-                aria-invalid={!!fieldErrors.password}
+                aria-invalid={!!fieldErrors["password"]}
                 placeholder="••••••••"
                 className="clay-inset h-12 border-0 px-5 pr-12 text-base placeholder:text-[var(--clay-muted)] focus-visible:ring-2 focus-visible:ring-[var(--clay-primary)]/40"
                 style={{ color: "var(--clay-text)" }}
@@ -255,8 +255,8 @@ function RegisterPage() {
                 {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
             </div>
-            {fieldErrors.password ? (
-              <p className="text-xs text-destructive">{fieldErrors.password}</p>
+            {fieldErrors["password"] ? (
+              <p className="text-xs text-destructive">{fieldErrors["password"]}</p>
             ) : (
               <p className="text-xs" style={{ color: "var(--clay-muted)" }}>
                 Minimum 8 characters.
@@ -279,13 +279,13 @@ function RegisterPage() {
               onChange={(e) => setConfirm(e.target.value)}
               required
               autoComplete="new-password"
-              aria-invalid={!!fieldErrors.confirm}
+              aria-invalid={!!fieldErrors["confirm"]}
               placeholder="••••••••"
               className="clay-inset h-12 border-0 px-5 text-base placeholder:text-[var(--clay-muted)] focus-visible:ring-2 focus-visible:ring-[var(--clay-primary)]/40"
               style={{ color: "var(--clay-text)" }}
             />
-            {fieldErrors.confirm && (
-              <p className="text-xs text-destructive">{fieldErrors.confirm}</p>
+            {fieldErrors["confirm"] && (
+              <p className="text-xs text-destructive">{fieldErrors["confirm"]}</p>
             )}
           </div>
 
