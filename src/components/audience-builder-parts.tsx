@@ -1,5 +1,7 @@
-import { X, Phone, Mail, Link2, CheckCircle2, Plus, ChevronDown } from "lucide-react";
+import { useMemo, useState } from "react";
+import { X, Phone, Mail, Link2, CheckCircle2, Plus, ChevronDown, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -181,11 +183,49 @@ export function ResultsTable({
   customers: AudienceResult["customers"];
   labelFor: (id: string) => string;
 }) {
-  const { page, setPage, totalPages, pagedRows, total } = usePagination(customers, [
-    customers.length,
+  const [query, setQuery] = useState("");
+  const trimmed = query.trim().toLowerCase();
+
+  // Instant client-side filter by name, phone, or email.
+  const filtered = useMemo(() => {
+    if (!trimmed) return customers;
+    return customers.filter((c) => {
+      const name = (c.fullName ?? "").toLowerCase();
+      const phone = (c.phone ?? "").toLowerCase();
+      const email = (c.email ?? "").toLowerCase();
+      return name.includes(trimmed) || phone.includes(trimmed) || email.includes(trimmed);
+    });
+  }, [customers, trimmed]);
+
+  // Reset to page 1 whenever the filter or data changes.
+  const { page, setPage, totalPages, pagedRows, total } = usePagination(filtered, [
+    filtered,
+    trimmed,
   ]);
+
   return (
     <div>
+      <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by name, phone, or email…"
+            className="h-9 rounded-lg border-border bg-muted/30 pl-9 text-sm placeholder:text-muted-foreground"
+            aria-label="Search customers"
+          />
+        </div>
+        {trimmed && (
+          <button
+            onClick={() => setQuery("")}
+            className="flex h-9 shrink-0 items-center gap-1 rounded-lg px-2.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="Clear search"
+          >
+            <X className="h-3.5 w-3.5" /> Clear
+          </button>
+        )}
+      </div>
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
@@ -217,51 +257,62 @@ export function ResultsTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {pagedRows.map((c) => (
-              <TableRow key={c.cloverCustomerId} className="border-border hover:bg-muted/30">
-                <TableCell className="px-4 py-3 font-semibold text-foreground">
-                  {c.fullName}
-                </TableCell>
-                <TableCell className="px-4 py-3 text-sm text-muted-foreground">
-                  {c.phone ?? "—"}
-                </TableCell>
-                <TableCell className="px-4 py-3 text-sm text-muted-foreground">
-                  {c.email ?? "—"}
-                </TableCell>
-                <TableCell className="px-4 py-3 text-right font-semibold tabular-nums">
-                  {money(c.lifetimeSpendCents)}
-                </TableCell>
-                <TableCell className="px-4 py-3 text-right tabular-nums text-muted-foreground">
-                  {c.visitCount}
-                </TableCell>
-                <TableCell className="px-4 py-3 text-sm text-muted-foreground">
-                  {formatDate(c.lastVisitMs)}
-                </TableCell>
-                <TableCell className="px-4 py-3">
-                  {c.ghlContactId ? (
-                    <span className="inline-flex items-center gap-1 rounded-md bg-success/15 px-2 py-0.5 text-xs font-bold text-success">
-                      <Link2 className="h-3 w-3" /> Linked
-                    </span>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">Unlinked</span>
-                  )}
-                </TableCell>
-                <TableCell className="px-4 py-3">
-                  <div className="flex flex-wrap gap-1">
-                    {c.matchingAudiences.slice(0, 2).map((id) => (
-                      <Badge key={id} variant="outline" className="text-[10px] font-semibold">
-                        {labelFor(id)}
-                      </Badge>
-                    ))}
-                    {c.matchingAudiences.length > 2 && (
-                      <Badge variant="outline" className="text-[10px]">
-                        +{c.matchingAudiences.length - 2}
-                      </Badge>
-                    )}
-                  </div>
+            {pagedRows.length === 0 ? (
+              <TableRow className="border-border">
+                <TableCell
+                  colSpan={8}
+                  className="px-4 py-10 text-center text-sm text-muted-foreground"
+                >
+                  No customers match “{query}”.
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              pagedRows.map((c) => (
+                <TableRow key={c.cloverCustomerId} className="border-border hover:bg-muted/30">
+                  <TableCell className="px-4 py-3 font-semibold text-foreground">
+                    {c.fullName}
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-sm text-muted-foreground">
+                    {c.phone ?? "—"}
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-sm text-muted-foreground">
+                    {c.email ?? "—"}
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-right font-semibold tabular-nums">
+                    {money(c.lifetimeSpendCents)}
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-right tabular-nums text-muted-foreground">
+                    {c.visitCount}
+                  </TableCell>
+                  <TableCell className="px-4 py-3 text-sm text-muted-foreground">
+                    {formatDate(c.lastVisitMs)}
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                    {c.ghlContactId ? (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-success/15 px-2 py-0.5 text-xs font-bold text-success">
+                        <Link2 className="h-3 w-3" /> Linked
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Unlinked</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="px-4 py-3">
+                    <div className="flex flex-wrap gap-1">
+                      {c.matchingAudiences.slice(0, 2).map((id) => (
+                        <Badge key={id} variant="outline" className="text-[10px] font-semibold">
+                          {labelFor(id)}
+                        </Badge>
+                      ))}
+                      {c.matchingAudiences.length > 2 && (
+                        <Badge variant="outline" className="text-[10px]">
+                          +{c.matchingAudiences.length - 2}
+                        </Badge>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </div>
