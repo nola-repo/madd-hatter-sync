@@ -8,7 +8,7 @@
 //
 // Self-contained (does not import backfill internals) to keep modules focused.
 import { getIntegrationConfig, type IntegrationConfig } from "./config.server";
-import { getSupabaseServer, type SupabaseClient } from "./supabase.server";
+import { getSupabaseServer } from "./supabase.server";
 import { normalizeEmail, normalizePhone } from "./matching.server";
 import { searchContactsByEmail, searchContactsByPhone, type GhlContact } from "./ghl.server";
 import { applyPurchaseTag, purchaseTagLabel, normalizeItemName } from "./ghl-tags.server";

@@ -194,12 +194,15 @@ export function SyncDashboard({ orderId, setOrderId, getStatus, getSchema, previ
       {/* Schema status */}
       {schema && (
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">CRM Custom Object: “POS Purchase Item”</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <SchemaSection schema={schema} locationId={status?.ghl?.locationId} />
-          </CardContent>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">CRM Custom Object: “POS Purchase Item”</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SchemaSection
+            schema={schema}
+            {...(status?.ghl?.locationId ? { locationId: status.ghl.locationId } : {})}
+          />
+        </CardContent>
         </Card>
       )}
 
@@ -551,7 +554,12 @@ function MatchBadge({ decision, reason }: { decision: string; reason: string }) 
       label: "Anonymous purchase",
     },
   };
-  const cfg = map[decision] ?? map.held_for_review;
+  const held = map["held_for_review"] ?? {
+    variant: "outline" as const,
+    label: "Held for review",
+    icon: <Clock className="h-4 w-4" />,
+  };
+  const cfg = map[decision] ?? held;
   return (
     <div className="flex items-start gap-3">
       <Badge variant={cfg.variant} className="gap-1.5">

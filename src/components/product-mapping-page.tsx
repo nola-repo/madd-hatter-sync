@@ -25,12 +25,13 @@ const CATEGORY_STYLE: Record<string, { bg: string; color: string }> = {
 };
 
 function getCatStyle(cat: string | null) {
-  if (!cat) return CATEGORY_STYLE.default;
+  const def = CATEGORY_STYLE["default"] ?? { bg: "#f1f5f9", color: "#475569" };
+  if (!cat) return def;
   const l = cat.toLowerCase();
   for (const key of Object.keys(CATEGORY_STYLE)) {
-    if (l.includes(key)) return CATEGORY_STYLE[key]!;
+    if (l.includes(key)) return CATEGORY_STYLE[key] ?? def;
   }
-  return CATEGORY_STYLE.default;
+  return def;
 }
 
 export function ProductMappingPage() {

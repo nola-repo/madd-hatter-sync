@@ -71,8 +71,7 @@ export function AudienceBuilderPage() {
     setStale(false);
     try {
       const cleanOr = orGroups.filter((g) => g.length > 0);
-      const res = (await runFn({ data: { andAudiences, orGroups: cleanOr } })) as
-        Awaited<ReturnType<typeof runFn>> | string;
+      const res: any = await runFn({ data: { andAudiences, orGroups: cleanOr } });
       if (typeof res === "string" && (res.includes("<!DOCTYPE") || res.includes("<html"))) {
         setError(
           "Unable to build audience right now. Please refresh and ensure you are signed in.",

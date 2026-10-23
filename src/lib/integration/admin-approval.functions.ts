@@ -26,7 +26,7 @@ export const checkAdminApproval = createServerFn({ method: "GET" }).handler(asyn
     }
 
     // Super admin is always automatically approved without manual SQL needed
-    if (isSuperAdminEmail(session.user?.email)) {
+    if (isSuperAdminEmail(session.email)) {
       return { setupRequired: false as const, approved: true, signedIn: true };
     }
 

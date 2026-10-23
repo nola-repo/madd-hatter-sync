@@ -30,7 +30,7 @@ export function SettingsPage() {
     setSetupRequired(null);
     try {
       const res = await getStatusFn();
-      if (res?.setupRequired) {
+      if (res && "setupRequired" in res && res.setupRequired) {
         setSetupRequired((res as any).missing);
       } else {
         setStatus(res as ConnectionStatus);
@@ -137,7 +137,10 @@ export function SettingsPage() {
             <CardTitle className="text-base">CRM Custom Object: “POS Purchase Item”</CardTitle>
           </CardHeader>
           <CardContent>
-            <SchemaSection schema={schema} locationId={status?.ghl?.locationId} />
+            <SchemaSection
+              schema={schema}
+              {...(status?.ghl?.locationId ? { locationId: status.ghl.locationId } : {})}
+            />
           </CardContent>
         </Card>
       )}

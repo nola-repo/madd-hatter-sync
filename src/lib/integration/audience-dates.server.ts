@@ -62,7 +62,10 @@ function wallToUtc(y: number, mo: number, d: number, h: number, mi: number): num
 
 /** True if a UTC-ms timestamp falls within [dateStr 20:00, dateStr+1 06:00) in TZ. */
 export function inEventWindow(ms: number, dateStr: string): boolean {
-  const [y, m, d] = dateStr.split("-").map(Number);
+  const parts = dateStr.split("-").map(Number);
+  const y = parts[0] ?? 2024;
+  const m = parts[1] ?? 1;
+  const d = parts[2] ?? 1;
   const startUtc = wallToUtc(y, m - 1, d, 20, 0);
   const endUtc = startUtc + 10 * 3600 * 1000; // 8 PM → 6 AM
   return ms >= startUtc && ms <= endUtc;

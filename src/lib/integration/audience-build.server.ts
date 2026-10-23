@@ -70,10 +70,12 @@ export async function buildAudience(
   for (const [id, s] of sets) audienceSizes[id] = s.size;
 
   let result: Set<string>;
-  if (andAudiences.length > 0) {
-    result = new Set(sets.get(andAudiences[0])!);
+  if (andAudiences.length > 0 && andAudiences[0]) {
+    result = new Set(sets.get(andAudiences[0]) ?? []);
     for (let i = 1; i < andAudiences.length; i++) {
-      const s = sets.get(andAudiences[i])!;
+      const audienceId = andAudiences[i];
+      if (!audienceId) continue;
+      const s = sets.get(audienceId) ?? new Set();
       result = new Set([...result].filter((x) => s.has(x)));
     }
   } else {
