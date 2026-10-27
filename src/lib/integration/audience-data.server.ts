@@ -7,6 +7,7 @@ import { getIntegrationConfig } from "./config.server";
 import { wallParts, wallDate, matchEventDate } from "./audience-dates.server";
 
 export type OrderRow = {
+  id: string;
   clover_order_id: string;
   clover_customer_id: string | null;
   total_cents: number;
@@ -61,7 +62,7 @@ async function fetchAllOrders(
     const { data, error } = await sb
       .from("orders")
       .select(
-        "clover_order_id,clover_customer_id,total_cents,net_sales_cents,created_time,payment_status,voided",
+        "id,clover_order_id,clover_customer_id,total_cents,net_sales_cents,created_time,payment_status,voided",
       )
       .eq("clover_merchant_id", mid)
       .order("created_time", { ascending: true })
@@ -273,8 +274,7 @@ export async function loadAggregates(): Promise<{
     const ym = `${p.y}-${String(p.mo).padStart(2, "0")}`;
     agg.visitsByMonth.set(ym, (agg.visitsByMonth.get(ym) ?? 0) + 1);
 
-    const oi =
-      itemsByCloverOrderId.get(o.clover_order_id) ?? itemsByOrderId.get(o.clover_order_id) ?? [];
+    const oi = itemsByOrderId.get(o.id) ?? itemsByCloverOrderId.get(o.clover_order_id) ?? [];
     for (const it of oi) agg.items.push(it);
 
     const eventDate = matchEventDate(t);
