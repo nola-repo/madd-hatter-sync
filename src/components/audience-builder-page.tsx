@@ -314,6 +314,8 @@ function GroupEditor({
   };
 
   const removeCondition = (idx: number) => {
+    // Prevent removing the last condition — empty groups fail silently
+    if (group.conditions.length <= 1) return;
     onChange({ ...group, conditions: group.conditions.filter((_, i) => i !== idx) });
   };
 
@@ -625,8 +627,8 @@ export function AudienceBuilderPage() {
                     {gi > 0 && !matchAllGroups && (
                       <div className="flex items-center gap-2 my-2">
                         <div className="h-px flex-1 bg-[#1E1E22]" />
-                        <span className="rounded-full border border-[#27272A] bg-[#111113] px-2 py-0.5 text-[10px] font-mono text-zinc-500">
-                          + Add Group
+                        <span className="rounded-full border border-[#27272A] bg-[#111113] px-2.5 py-0.5 text-[10px] font-mono font-semibold text-zinc-400">
+                          OR
                         </span>
                         <div className="h-px flex-1 bg-[#1E1E22]" />
                       </div>
