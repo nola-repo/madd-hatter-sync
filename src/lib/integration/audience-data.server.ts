@@ -51,8 +51,7 @@ export type CustomerAgg = {
 
 const PAGE = 1000;
 
-async function fetchAllOrders(mid: string): Promise<OrderRow[]> {
-  const sb = getSupabaseServer();
+async function fetchAllOrders(sb: ReturnType<typeof getSupabaseServer>, mid: string): Promise<OrderRow[]> {
   const out: OrderRow[] = [];
   let off = 0;
   for (;;) {
@@ -75,8 +74,7 @@ async function fetchAllOrders(mid: string): Promise<OrderRow[]> {
   return out;
 }
 
-async function fetchAllItems(mid: string): Promise<ItemRow[]> {
-  const sb = getSupabaseServer();
+async function fetchAllItems(sb: ReturnType<typeof getSupabaseServer>, mid: string): Promise<ItemRow[]> {
   const out: ItemRow[] = [];
   let off = 0;
   for (;;) {
@@ -120,7 +118,9 @@ export async function loadAggregates(): Promise<{
   let orders: OrderRow[] = [];
   let items: ItemRow[] = [];
   try {
-    [orders, items] = await Promise.all([fetchAllOrders(mid), fetchAllItems(mid)]);
+    if (sb && mid) {
+      [orders, items] = await Promise.all([fetchAllOrders(sb, mid), fetchAllItems(sb, mid)]);
+    }
   } catch (e) {
     console.warn("Audience: order/item fetch failed:", (e as Error)?.message);
   }
