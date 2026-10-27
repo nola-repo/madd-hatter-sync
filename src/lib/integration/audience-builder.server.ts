@@ -36,7 +36,9 @@ export async function buildAudience(query: AudienceQuery): Promise<AudienceBuild
   // fast enough for the data volumes a Clover restaurant produces.
   const { data: orderRows, error: oErr } = await sb
     .from("orders")
-    .select("id, clover_customer_id, clover_order_id, total_cents, net_sales_cents, created_time, payment_status, voided")
+    .select(
+      "id, clover_customer_id, clover_order_id, total_cents, net_sales_cents, created_time, payment_status, voided",
+    )
     .not("clover_customer_id", "is", null)
     .limit(100_000);
 

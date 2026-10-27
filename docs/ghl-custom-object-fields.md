@@ -11,23 +11,23 @@
 
 ## Required Fields (15 total)
 
-| Field Label | Type | Notes |
-|---|---|---|
-| **Purchase Reference** | Text | ⚠️ **Critical.** Deterministic ID: `clover:{merchantId}:{orderId}:{lineItemId}`. Used to detect duplicate records. |
-| **Item Name** | Text | The Clover inventory item name, e.g. "Wings" |
-| **Category** | Text | Clover item category name |
-| **Quantity** | Number | Integer quantity sold |
-| **Unit Price** | Text | Formatted as `"10.99"` (dollars.cents) |
-| **Line Total** | Text | Formatted as `"21.98"` (quantity × unit price − discount) |
-| **Currency** | Text | ISO 4217 code, e.g. `"USD"` |
-| **Purchase Date** | Date / Text | ISO 8601 string, e.g. `"2026-09-29T12:00:00.000Z"` |
-| **Clover Order ID** | Text | Raw Clover order ID |
-| **Clover Line Item ID** | Text | Raw Clover line item ID |
-| **Clover Item ID** | Text | Clover inventory item ID (may be empty for custom items) |
-| **Clover Merchant ID** | Text | The merchant ID this order belongs to |
-| **Clover Customer ID** | Text | Clover customer ID (empty for anonymous walk-ins) |
-| **Location Name** | Text | Clover merchant/device location label |
-| **Payment Status** | Text | One of: `PAID`, `PARTIALLY_PAID`, `PENDING`, `REFUNDED`, `VOIDED`, `UNKNOWN` |
+| Field Label             | Type        | Notes                                                                                                              |
+| ----------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Purchase Reference**  | Text        | ⚠️ **Critical.** Deterministic ID: `clover:{merchantId}:{orderId}:{lineItemId}`. Used to detect duplicate records. |
+| **Item Name**           | Text        | The Clover inventory item name, e.g. "Wings"                                                                       |
+| **Category**            | Text        | Clover item category name                                                                                          |
+| **Quantity**            | Number      | Integer quantity sold                                                                                              |
+| **Unit Price**          | Text        | Formatted as `"10.99"` (dollars.cents)                                                                             |
+| **Line Total**          | Text        | Formatted as `"21.98"` (quantity × unit price − discount)                                                          |
+| **Currency**            | Text        | ISO 4217 code, e.g. `"USD"`                                                                                        |
+| **Purchase Date**       | Date / Text | ISO 8601 string, e.g. `"2026-09-29T12:00:00.000Z"`                                                                 |
+| **Clover Order ID**     | Text        | Raw Clover order ID                                                                                                |
+| **Clover Line Item ID** | Text        | Raw Clover line item ID                                                                                            |
+| **Clover Item ID**      | Text        | Clover inventory item ID (may be empty for custom items)                                                           |
+| **Clover Merchant ID**  | Text        | The merchant ID this order belongs to                                                                              |
+| **Clover Customer ID**  | Text        | Clover customer ID (empty for anonymous walk-ins)                                                                  |
+| **Location Name**       | Text        | Clover merchant/device location label                                                                              |
+| **Payment Status**      | Text        | One of: `PAID`, `PARTIALLY_PAID`, `PENDING`, `REFUNDED`, `VOIDED`, `UNKNOWN`                                       |
 
 ## Rebuilding the Object in GHL
 
@@ -41,8 +41,10 @@
 ## Verification
 
 After rebuilding, call:
+
 ```
 GET /api/health?secret=<SYNC_SECRET>
 ```
+
 The `ghl_schema_id_valid` check will confirm whether the env var matches the
 object GHL actually returns.

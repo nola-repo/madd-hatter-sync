@@ -198,7 +198,10 @@ function NamePicker({
       {/* Trigger */}
       <button
         type="button"
-        onClick={() => { setOpen((p) => !p); setSearch(""); }}
+        onClick={() => {
+          setOpen((p) => !p);
+          setSearch("");
+        }}
         className={cn(
           "flex w-full items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 text-xs transition-colors",
           hasValue
@@ -207,7 +210,12 @@ function NamePicker({
         )}
       >
         <span className="truncate">{hasValue ? value : placeholder}</span>
-        <ChevronDown className={cn("h-3 w-3 shrink-0 text-zinc-500 transition-transform", open && "rotate-180")} />
+        <ChevronDown
+          className={cn(
+            "h-3 w-3 shrink-0 text-zinc-500 transition-transform",
+            open && "rotate-180",
+          )}
+        />
       </button>
 
       {/* Dropdown */}
@@ -234,15 +242,20 @@ function NamePicker({
           {/* Option list */}
           <div className="max-h-52 overflow-y-auto">
             {/* Allow typing a custom value not in the list */}
-            {search.trim() && !filtered.some((o) => o.name.toLowerCase() === search.toLowerCase()) && (
-              <button
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-300 hover:bg-zinc-800 transition-colors border-b border-[#1E1E22]"
-                onClick={() => { onChange(search.trim()); setOpen(false); setSearch(""); }}
-              >
-                <Plus className="h-3 w-3 text-zinc-500" />
-                Use "<span className="font-semibold text-white">{search.trim()}</span>"
-              </button>
-            )}
+            {search.trim() &&
+              !filtered.some((o) => o.name.toLowerCase() === search.toLowerCase()) && (
+                <button
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-300 hover:bg-zinc-800 transition-colors border-b border-[#1E1E22]"
+                  onClick={() => {
+                    onChange(search.trim());
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                >
+                  <Plus className="h-3 w-3 text-zinc-500" />
+                  Use "<span className="font-semibold text-white">{search.trim()}</span>"
+                </button>
+              )}
 
             {filtered.length === 0 && !search.trim() && (
               <div className="py-6 text-center text-xs text-zinc-600">
@@ -257,10 +270,16 @@ function NamePicker({
                   "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs transition-colors hover:bg-zinc-800",
                   value === opt.name ? "bg-zinc-800/60 text-white" : "text-zinc-300",
                 )}
-                onClick={() => { onChange(opt.name); setOpen(false); setSearch(""); }}
+                onClick={() => {
+                  onChange(opt.name);
+                  setOpen(false);
+                  setSearch("");
+                }}
               >
                 <span className="truncate">{opt.name}</span>
-                <span className="shrink-0 text-[10px] font-mono text-zinc-600">×{opt.count.toLocaleString()}</span>
+                <span className="shrink-0 text-[10px] font-mono text-zinc-600">
+                  ×{opt.count.toLocaleString()}
+                </span>
               </button>
             ))}
           </div>
@@ -530,7 +549,19 @@ function GroupEditor({
 
 function exportCSV(customers: AudienceCustomerRow[], label: string) {
   const rows = [
-    ["Name", "Email", "Phone", "Clover ID", "GHL Contact ID", "Match Status", "Orders", "Total Spend", "Max Single Order", "Last Visit", "Matched Conditions"],
+    [
+      "Name",
+      "Email",
+      "Phone",
+      "Clover ID",
+      "GHL Contact ID",
+      "Match Status",
+      "Orders",
+      "Total Spend",
+      "Max Single Order",
+      "Last Visit",
+      "Matched Conditions",
+    ],
     ...customers.map((c) => [
       c.customerName,
       c.email ?? "",
@@ -545,7 +576,9 @@ function exportCSV(customers: AudienceCustomerRow[], label: string) {
       c.matchedConditions.join(" | "),
     ]),
   ];
-  const csv = rows.map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const csv = rows
+    .map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -563,7 +596,10 @@ export function AudienceBuilderPage() {
   const uid = useId();
 
   // ---- Filter options from DB (items + categories)
-  const [filterOptions, setFilterOptions] = useState<FilterOptionsData>({ items: [], categories: [] });
+  const [filterOptions, setFilterOptions] = useState<FilterOptionsData>({
+    items: [],
+    categories: [],
+  });
   const [optionsLoading, setOptionsLoading] = useState(true);
 
   useEffect(() => {
@@ -573,9 +609,11 @@ export function AudienceBuilderPage() {
           setFilterOptions({ items: res.items, categories: res.categories });
         }
       })
-      .catch(() => {/* silently ignore - fallback to free text */})
+      .catch(() => {
+        /* silently ignore - fallback to free text */
+      })
       .finally(() => setOptionsLoading(false));
-  }, []);
+  }, [getFilterOptionsFn]);
 
   // ---- Query state
   const [matchAllGroups, setMatchAllGroups] = useState(true);
@@ -606,11 +644,12 @@ export function AudienceBuilderPage() {
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const audienceLabel = groups
-    .flatMap((g) => g.conditions)
-    .map((c) => c.label)
-    .filter(Boolean)
-    .join(", ") || "Audience";
+  const audienceLabel =
+    groups
+      .flatMap((g) => g.conditions)
+      .map((c) => c.label)
+      .filter(Boolean)
+      .join(", ") || "Audience";
 
   // ---- Build audience
   const handleBuild = useCallback(async () => {
@@ -663,8 +702,20 @@ export function AudienceBuilderPage() {
       id: `${newId}-c0`,
       type: def.type,
       ...def.defaultValues,
-      label: makeConditionLabel({ id: "", type: def.type, ...def.defaultValues, label: "", description: "" }),
-      description: makeConditionDescription({ id: "", type: def.type, ...def.defaultValues, label: "", description: "" }),
+      label: makeConditionLabel({
+        id: "",
+        type: def.type,
+        ...def.defaultValues,
+        label: "",
+        description: "",
+      }),
+      description: makeConditionDescription({
+        id: "",
+        type: def.type,
+        ...def.defaultValues,
+        label: "",
+        description: "",
+      }),
     };
     setGroups((prev) => [...prev, { id: newId, conditions: [cond] }]);
     setActivePreset(null);
@@ -744,7 +795,9 @@ export function AudienceBuilderPage() {
                   >
                     <span className="text-base mb-0.5">{preset.icon}</span>
                     <span className="font-medium leading-tight">{preset.label}</span>
-                    <span className="text-zinc-600 text-[10px] leading-tight mt-0.5">{preset.description}</span>
+                    <span className="text-zinc-600 text-[10px] leading-tight mt-0.5">
+                      {preset.description}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -833,8 +886,7 @@ export function AudienceBuilderPage() {
                 onClick={addGroup}
                 className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#27272A] py-2.5 text-[11px] text-zinc-500 hover:border-zinc-500 hover:text-zinc-300 transition-colors"
               >
-                <Plus className="h-3 w-3" />
-                + Add Group
+                <Plus className="h-3 w-3" />+ Add Group
               </button>
 
               {/* Build button */}
@@ -879,13 +931,20 @@ export function AudienceBuilderPage() {
                 </div>
                 <p className="text-sm font-medium text-zinc-400">No audience built yet</p>
                 <p className="mt-1 text-xs text-zinc-600 max-w-xs mx-auto">
-                  Configure your filters on the left, then click <strong className="text-zinc-400">Build Audience</strong> to generate your customer list.
+                  Configure your filters on the left, then click{" "}
+                  <strong className="text-zinc-400">Build Audience</strong> to generate your
+                  customer list.
                 </p>
                 {!optionsLoading && filterOptions.items.length > 0 && (
                   <div className="mt-4 flex flex-wrap justify-center gap-1.5 max-w-sm mx-auto">
-                    <span className="text-[10px] text-zinc-600 w-full mb-1">Popular items in your data:</span>
+                    <span className="text-[10px] text-zinc-600 w-full mb-1">
+                      Popular items in your data:
+                    </span>
                     {filterOptions.items.slice(0, 8).map((item) => (
-                      <span key={item.name} className="rounded-full border border-[#222226] bg-[#141417] px-2 py-0.5 text-[10px] text-zinc-500">
+                      <span
+                        key={item.name}
+                        className="rounded-full border border-[#222226] bg-[#141417] px-2 py-0.5 text-[10px] text-zinc-500"
+                      >
                         {item.name}
                       </span>
                     ))}
@@ -901,7 +960,9 @@ export function AudienceBuilderPage() {
               <CardContent className="py-20 text-center">
                 <RefreshCw className="h-8 w-8 animate-spin text-zinc-500 mx-auto mb-4" />
                 <p className="text-sm text-zinc-400">Building audience…</p>
-                <p className="mt-1 text-xs text-zinc-600">Scanning customer records and applying filters</p>
+                <p className="mt-1 text-xs text-zinc-600">
+                  Scanning customer records and applying filters
+                </p>
               </CardContent>
             </Card>
           )}
@@ -972,7 +1033,10 @@ export function AudienceBuilderPage() {
                           </tr>
                         ) : (
                           filteredCustomers.map((c) => (
-                            <tr key={c.cloverCustomerId} className="hover:bg-[#0E0E10] transition-colors">
+                            <tr
+                              key={c.cloverCustomerId}
+                              className="hover:bg-[#0E0E10] transition-colors"
+                            >
                               <td className="py-3 px-4">
                                 <div className="font-medium text-[#F5F5F5]">{c.customerName}</div>
                                 <div className="font-mono text-[10px] text-zinc-600 truncate max-w-[120px]">
@@ -981,14 +1045,16 @@ export function AudienceBuilderPage() {
                               </td>
                               <td className="py-3 px-4">
                                 {c.email && (
-                                  <div className="text-zinc-300 truncate max-w-[160px]">{c.email}</div>
+                                  <div className="text-zinc-300 truncate max-w-[160px]">
+                                    {c.email}
+                                  </div>
                                 )}
                                 {c.phone && (
-                                  <div className="font-mono text-zinc-500 text-[10px]">{c.phone}</div>
+                                  <div className="font-mono text-zinc-500 text-[10px]">
+                                    {c.phone}
+                                  </div>
                                 )}
-                                {!c.email && !c.phone && (
-                                  <span className="text-zinc-600">—</span>
-                                )}
+                                {!c.email && !c.phone && <span className="text-zinc-600">—</span>}
                               </td>
                               <td className="py-3 px-4 font-mono text-right text-[#E4E4E7]">
                                 {c.orderCount}
@@ -1048,7 +1114,8 @@ export function AudienceBuilderPage() {
                   {filteredCustomers.length > 0 && (
                     <div className="border-t border-[#1E1E22] px-4 py-3 flex items-center justify-between">
                       <span className="text-xs text-zinc-600">
-                        Showing {filteredCustomers.length.toLocaleString()} of {result.total.toLocaleString()} customers
+                        Showing {filteredCustomers.length.toLocaleString()} of{" "}
+                        {result.total.toLocaleString()} customers
                       </span>
                       <Button
                         variant="outline"

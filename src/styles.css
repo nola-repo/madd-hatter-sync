@@ -10,150 +10,157 @@
  */
 
 @theme inline {
-    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    --font-display: 'Space Grotesk', 'Syne', sans-serif;
-    --font-heading: 'Syne', sans-serif;
-    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Space Grotesk", "Syne", sans-serif;
+  --font-heading: "Syne", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-    --radius-sm: calc(var(--radius) - 4px);
-    --radius-md: calc(var(--radius) - 2px);
-    --radius-lg: var(--radius);
-    --radius-xl: calc(var(--radius) + 4px);
-    --radius-2xl: calc(var(--radius) + 8px);
-    --radius-3xl: calc(var(--radius) + 12px);
-    --radius-4xl: calc(var(--radius) + 16px);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
 
-    --color-background: var(--background);
-    --color-foreground: var(--foreground);
-    --color-card: var(--card);
-    --color-card-foreground: var(--card-foreground);
-    --color-popover: var(--popover);
-    --color-popover-foreground: var(--popover-foreground);
-    --color-primary: var(--primary);
-    --color-primary-foreground: var(--primary-foreground);
-    --color-secondary: var(--secondary);
-    --color-secondary-foreground: var(--secondary-foreground);
-    --color-muted: var(--muted);
-    --color-muted-foreground: var(--muted-foreground);
-    --color-accent: var(--accent);
-    --color-accent-foreground: var(--accent-foreground);
-    --color-destructive: var(--destructive);
-    --color-destructive-foreground: var(--destructive-foreground);
-    --color-border: var(--border);
-    --color-input: var(--input);
-    --color-ring: var(--ring);
-    --color-ring-offset-background: var(--background);
-    --color-chart-1: var(--chart-1);
-    --color-chart-2: var(--chart-2);
-    --color-chart-3: var(--chart-3);
-    --color-chart-4: var(--chart-4);
-    --color-chart-5: var(--chart-5);
-    --color-sidebar: var(--sidebar);
-    --color-sidebar-foreground: var(--sidebar-foreground);
-    --color-sidebar-primary: var(--sidebar-primary);
-    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-    --color-sidebar-accent: var(--sidebar-accent);
-    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-    --color-sidebar-border: var(--sidebar-border);
-    --color-sidebar-ring: var(--sidebar-ring);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ring-offset-background: var(--background);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
 }
 
-:root, .dark {
-    --radius: 0.5rem;
-    --background: #080808;
-    --foreground: #F5F5F5;
-    --card: #111111;
-    --card-foreground: #F5F5F5;
-    --popover: #141416;
-    --popover-foreground: #F5F5F5;
-    --primary: #F5F5F5;
-    --primary-foreground: #09090B;
-    --secondary: #171717;
-    --secondary-foreground: #E4E4E7;
-    --muted: #1A1A1E;
-    --muted-foreground: #A1A1AA;
-    --accent: #202025;
-    --accent-foreground: #FAFAFA;
-    --destructive: #DC2626;
-    --destructive-foreground: #FFFFFF;
-    --border: #27272A;
-    --input: #27272A;
-    --ring: #71717A;
-    --chart-1: #E4E4E7;
-    --chart-2: #10B981;
-    --chart-3: #F59E0B;
-    --chart-4: #8B5CF6;
-    --chart-5: #3B82F6;
-    --sidebar: #0C0C0E;
-    --sidebar-foreground: #F5F5F5;
-    --sidebar-primary: #F5F5F5;
-    --sidebar-primary-foreground: #09090B;
-    --sidebar-accent: #171717;
-    --sidebar-accent-foreground: #F5F5F5;
-    --sidebar-border: #222226;
-    --sidebar-ring: #71717A;
+:root,
+.dark {
+  --radius: 0.5rem;
+  --background: #080808;
+  --foreground: #f5f5f5;
+  --card: #111111;
+  --card-foreground: #f5f5f5;
+  --popover: #141416;
+  --popover-foreground: #f5f5f5;
+  --primary: #f5f5f5;
+  --primary-foreground: #09090b;
+  --secondary: #171717;
+  --secondary-foreground: #e4e4e7;
+  --muted: #1a1a1e;
+  --muted-foreground: #a1a1aa;
+  --accent: #202025;
+  --accent-foreground: #fafafa;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #27272a;
+  --input: #27272a;
+  --ring: #71717a;
+  --chart-1: #e4e4e7;
+  --chart-2: #10b981;
+  --chart-3: #f59e0b;
+  --chart-4: #8b5cf6;
+  --chart-5: #3b82f6;
+  --sidebar: #0c0c0e;
+  --sidebar-foreground: #f5f5f5;
+  --sidebar-primary: #f5f5f5;
+  --sidebar-primary-foreground: #09090b;
+  --sidebar-accent: #171717;
+  --sidebar-accent-foreground: #f5f5f5;
+  --sidebar-border: #222226;
+  --sidebar-ring: #71717a;
 }
 
 @layer base {
-    * {
-        border-color: var(--color-border);
-    }
+  * {
+    border-color: var(--color-border);
+  }
 
-    body {
-        background-color: var(--color-background);
-        color: var(--color-foreground);
-        font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-    }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
 
-    h1, h2, h3, h4, .font-display {
-        font-family: var(--font-display);
-        letter-spacing: -0.02em;
-    }
+  h1,
+  h2,
+  h3,
+  h4,
+  .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
 
-    .font-syne {
-        font-family: var(--font-heading);
-    }
+  .font-syne {
+    font-family: var(--font-heading);
+  }
 
-    .tabular-nums {
-        font-variant-numeric: tabular-nums;
-    }
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 /* Custom subtle scrollbar */
 ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-    background: #080808;
+  background: #080808;
 }
 ::-webkit-scrollbar-thumb {
-    background: #27272A;
-    border-radius: 9999px;
+  background: #27272a;
+  border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-    background: #3F3F46;
+  background: #3f3f46;
 }
 
 /* Glass & surface subtleties */
 .surface-card {
-    background-color: #111111;
-    border: 1px solid #27272A;
-    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
+  background-color: #111111;
+  border: 1px solid #27272a;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
 }
 
 .surface-glow {
-    position: relative;
+  position: relative;
 }
 .surface-glow::after {
-    content: '';
-    position: absolute;
-    inset: -1px;
-    border-radius: inherit;
-    padding: 1px;
-    background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), transparent 60%);
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    pointer-events: none;
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), transparent 60%);
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
 }

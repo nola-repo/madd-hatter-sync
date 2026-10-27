@@ -1,8 +1,8 @@
 import { useEffect, useRef, useCallback } from "react";
 import {
-    refreshPos,
-    processPendingPurchasesFn,
-    syncAllPaidOrdersToCustomObjectsFn,
+  refreshPos,
+  processPendingPurchasesFn,
+  syncAllPaidOrdersToCustomObjectsFn,
 } from "@/lib/integration/integration.functions";
 import { useServerFn } from "@tanstack/react-start";
 import { useSyncContext } from "./use-sync-context";
@@ -18,28 +18,28 @@ const SYNC_LOCK_KEY = "mh_sync_tab_lock";
 const SYNC_LOCK_TTL_MS = 90_000; // 90 s — safely covers one full pipeline run
 
 function tryAcquireCrossTabLock(): boolean {
-    try {
-        const stored = localStorage.getItem(SYNC_LOCK_KEY);
-        if (stored) {
-            const ts = parseInt(stored, 10);
-            // Another tab claimed the lock and it hasn't expired yet → skip.
-            if (!isNaN(ts) && Date.now() - ts < SYNC_LOCK_TTL_MS) return false;
-        }
-        // Claim the lock with the current timestamp.
-        localStorage.setItem(SYNC_LOCK_KEY, Date.now().toString());
-        return true;
-    } catch {
-        // localStorage unavailable (private browsing, SSR) → allow sync.
-        return true;
+  try {
+    const stored = localStorage.getItem(SYNC_LOCK_KEY);
+    if (stored) {
+      const ts = parseInt(stored, 10);
+      // Another tab claimed the lock and it hasn't expired yet → skip.
+      if (!isNaN(ts) && Date.now() - ts < SYNC_LOCK_TTL_MS) return false;
     }
+    // Claim the lock with the current timestamp.
+    localStorage.setItem(SYNC_LOCK_KEY, Date.now().toString());
+    return true;
+  } catch {
+    // localStorage unavailable (private browsing, SSR) → allow sync.
+    return true;
+  }
 }
 
 function releaseCrossTabLock(): void {
-    try {
-        localStorage.removeItem(SYNC_LOCK_KEY);
-    } catch {
-        // Ignore — failure here is harmless; the TTL will expire the lock.
-    }
+  try {
+    localStorage.removeItem(SYNC_LOCK_KEY);
+  } catch {
+    // Ignore — failure here is harmless; the TTL will expire the lock.
+  }
 }
 
 /**
@@ -53,79 +53,79 @@ function releaseCrossTabLock(): void {
  * at a time, preventing duplicate GHL API calls when multiple tabs are open.
  */
 export function useSilentAutoSync() {
-    const refreshFn = useServerFn(refreshPos);
-    const processMappingsFn = useServerFn(processPendingPurchasesFn);
-    const syncCustomObjectsFn = useServerFn(syncAllPaidOrdersToCustomObjectsFn);
-    const { bump, setSyncing } = useSyncContext();
-    const syncInFlight = useRef(false);
-    const lastSyncAt = useRef(0);
+  const refreshFn = useServerFn(refreshPos);
+  const processMappingsFn = useServerFn(processPendingPurchasesFn);
+  const syncCustomObjectsFn = useServerFn(syncAllPaidOrdersToCustomObjectsFn);
+  const { bump, setSyncing } = useSyncContext();
+  const syncInFlight = useRef(false);
+  const lastSyncAt = useRef(0);
 
-    const runSync = useCallback(
-        async (silent = true) => {
-            // Per-tab in-flight guard (fast path).
-            if (syncInFlight.current) return;
+  const runSync = useCallback(
+    async (silent = true) => {
+      // Per-tab in-flight guard (fast path).
+      if (syncInFlight.current) return;
 
-            // FIX #19: Cross-tab lock — only one tab runs the pipeline at a time.
-            if (!tryAcquireCrossTabLock()) return;
+      // FIX #19: Cross-tab lock — only one tab runs the pipeline at a time.
+      if (!tryAcquireCrossTabLock()) return;
 
-            syncInFlight.current = true;
-            if (!silent) setSyncing(true);
-            try {
-                // Step 1: Pull latest Clover data for current month
-                await refreshFn({ data: { kind: "incremental", range: "month" } });
+      syncInFlight.current = true;
+      if (!silent) setSyncing(true);
+      try {
+        // Step 1: Pull latest Clover data for current month
+        await refreshFn({ data: { kind: "incremental", range: "month" } });
 
-                // Step 2: Auto-match customers and apply purchase tags
-                try {
-                    await processMappingsFn({ data: { limit: 100 } });
-                } catch (mErr) {
-                    console.warn("[silent-auto-sync] Mapping step notice:", mErr);
-                }
+        // Step 2: Auto-match customers and apply purchase tags
+        try {
+          await processMappingsFn({ data: { limit: 100 } });
+        } catch (mErr) {
+          console.warn("[silent-auto-sync] Mapping step notice:", mErr);
+        }
 
-                // Step 3: Auto-sync paid orders to POS Purchase Items custom objects
-                try {
-                    await syncCustomObjectsFn({ data: { limit: 100 } });
-                } catch (coErr) {
-                    console.warn("[silent-auto-sync] Custom object step notice:", coErr);
-                }
+        // Step 3: Auto-sync paid orders to POS Purchase Items custom objects
+        try {
+          await syncCustomObjectsFn({ data: { limit: 100 } });
+        } catch (coErr) {
+          console.warn("[silent-auto-sync] Custom object step notice:", coErr);
+        }
 
-                lastSyncAt.current = Date.now();
-                bump();
-            } catch (err) {
-                console.warn("[silent-auto-sync] run failed:", err);
-            } finally {
-                syncInFlight.current = false;
-                releaseCrossTabLock();
-                if (!silent) setSyncing(false);
-            }
-        },
-        [refreshFn, processMappingsFn, syncCustomObjectsFn, bump, setSyncing],
-    );
+        lastSyncAt.current = Date.now();
+        bump();
+      } catch (err) {
+        console.warn("[silent-auto-sync] run failed:", err);
+      } finally {
+        syncInFlight.current = false;
+        releaseCrossTabLock();
+        if (!silent) setSyncing(false);
+      }
+    },
+    [refreshFn, processMappingsFn, syncCustomObjectsFn, bump, setSyncing],
+  );
 
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            runSync(true);
-        }, INITIAL_DELAY_MS);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      runSync(true);
+    }, INITIAL_DELAY_MS);
 
-        const interval = setInterval(() => {
-            runSync(true);
-        }, RECURRING_INTERVAL_MS);
+    const interval = setInterval(() => {
+      runSync(true);
+    }, RECURRING_INTERVAL_MS);
 
-        const handleVisibilityChange = () => {
-            if (
-                document.visibilityState === "visible" &&
-                Date.now() - lastSyncAt.current > VISIBILITY_DEBOUNCE_MS
-            ) {
-                runSync(true);
-            }
-        };
-        document.addEventListener("visibilitychange", handleVisibilityChange);
+    const handleVisibilityChange = () => {
+      if (
+        document.visibilityState === "visible" &&
+        Date.now() - lastSyncAt.current > VISIBILITY_DEBOUNCE_MS
+      ) {
+        runSync(true);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
-        return () => {
-            clearTimeout(timer);
-            clearInterval(interval);
-            document.removeEventListener("visibilitychange", handleVisibilityChange);
-            // Release lock on unmount so other tabs can pick up immediately.
-            releaseCrossTabLock();
-        };
-    }, [runSync]);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      // Release lock on unmount so other tabs can pick up immediately.
+      releaseCrossTabLock();
+    };
+  }, [runSync]);
 }

@@ -1,4 +1,3 @@
- 
 # Welcome to your AI Studio project
 
 This project was built with AI Studio.
