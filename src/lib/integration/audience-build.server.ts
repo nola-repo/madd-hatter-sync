@@ -58,8 +58,9 @@ export async function buildAudience(
   orGroups: AudienceId[][] = [],
 ): Promise<AudienceResult> {
   let allCustomers: CustomerAgg[] = [];
+  let loadWarnings: string[] = [];
   try {
-    ({ allCustomers } = await loadAggregates());
+    ({ allCustomers, warnings: loadWarnings } = await loadAggregates());
   } catch (e) {
     console.error("Audience: loadAggregates failed:", (e as Error)?.message);
     // Return an empty result with a warning instead of throwing across the RPC boundary.
@@ -76,7 +77,7 @@ export async function buildAudience(
       ],
     };
   }
-  const warnings: string[] = [];
+  const warnings: string[] = [...loadWarnings];
 
   const sets = new Map<AudienceId, Set<string>>();
   const allIds = new Set<AudienceId>([...andAudiences, ...orGroups.flat()]);

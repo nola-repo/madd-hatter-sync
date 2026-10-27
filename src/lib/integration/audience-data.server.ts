@@ -106,19 +106,24 @@ async function fetchAllItems(
 export async function loadAggregates(): Promise<{
   byCustomer: Map<string, CustomerAgg>;
   allCustomers: CustomerAgg[];
+  warnings: string[];
 }> {
+  const warnings: string[] = [];
   let sb: ReturnType<typeof getSupabaseServer> | null = null;
   let mid = "";
   try {
     sb = getSupabaseServer();
     mid = getIntegrationConfig().clover.merchantId;
     if (!mid) {
-      console.warn("Audience: no merchant ID configured");
-      return { byCustomer: new Map(), allCustomers: [] };
+      warnings.push(
+        "No Clover merchant ID configured (CLOVER_MERCHANT_ID). Add it in Settings → Secrets.",
+      );
+      return { byCustomer: new Map(), allCustomers: [], warnings };
     }
   } catch (e) {
-    console.warn("Audience: config/supabase init failed:", (e as Error)?.message);
-    return { byCustomer: new Map(), allCustomers: [] };
+    const msg = (e as Error)?.message ?? String(e);
+    warnings.push(`Configuration error: ${msg}. Add the missing secrets in Settings → Secrets.`);
+    return { byCustomer: new Map(), allCustomers: [], warnings };
   }
 
   let orders: OrderRow[] = [];
@@ -128,7 +133,8 @@ export async function loadAggregates(): Promise<{
       [orders, items] = await Promise.all([fetchAllOrders(sb, mid), fetchAllItems(sb, mid)]);
     }
   } catch (e) {
-    console.warn("Audience: order/item fetch failed:", (e as Error)?.message);
+    const msg = (e as Error)?.message ?? String(e);
+    warnings.push(`Orders/items fetch failed: ${msg}`);
   }
 
   // Paginate customers to avoid PostgREST's 1000-row default cap (DEF-011).
@@ -150,7 +156,7 @@ export async function loadAggregates(): Promise<{
         .eq("clover_merchant_id", mid)
         .range(off, off + PAGE - 1);
       if (error) {
-        console.warn("Audience: customers query warning:", error.message);
+        warnings.push(`Customers query error: ${error.message}`);
         break;
       }
       custRows.push(...(data ?? []));
@@ -158,7 +164,7 @@ export async function loadAggregates(): Promise<{
       off += PAGE;
     }
   } catch (e) {
-    console.warn("Audience: customers fetch failed:", (e as Error)?.message);
+    warnings.push(`Customers fetch failed: ${(e as Error)?.message ?? String(e)}`);
   }
 
   // Paginate customer_mappings — same reason (DEF-011).
@@ -182,7 +188,7 @@ export async function loadAggregates(): Promise<{
         .eq("clover_merchant_id", mid)
         .range(off, off + PAGE - 1);
       if (mErr) {
-        console.warn("Audience: customer_mappings query warning:", mErr.message);
+        warnings.push(`Customer mappings query error: ${mErr.message}`);
         ok = false;
         break;
       }
@@ -192,7 +198,7 @@ export async function loadAggregates(): Promise<{
     }
     if (ok) mapRows = allMap;
   } catch (e) {
-    console.warn("Audience: customer_mappings fetch failed:", (e as Error)?.message);
+    warnings.push(`Customer mappings fetch failed: ${(e as Error)?.message ?? String(e)}`);
   }
 
   const custMap = new Map((custRows ?? []).map((c) => [c.clover_customer_id, c]));
@@ -275,5 +281,5 @@ export async function loadAggregates(): Promise<{
     if (eventDate) agg.eventNights.add(eventDate);
   }
 
-  return { byCustomer, allCustomers: Array.from(byCustomer.values()) };
+  return { byCustomer, allCustomers: Array.from(byCustomer.values()), warnings };
 }
