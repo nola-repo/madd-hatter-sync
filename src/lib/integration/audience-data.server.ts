@@ -51,7 +51,10 @@ export type CustomerAgg = {
 
 const PAGE = 1000;
 
-async function fetchAllOrders(sb: ReturnType<typeof getSupabaseServer>, mid: string): Promise<OrderRow[]> {
+async function fetchAllOrders(
+  sb: ReturnType<typeof getSupabaseServer>,
+  mid: string,
+): Promise<OrderRow[]> {
   const out: OrderRow[] = [];
   let off = 0;
   for (;;) {
@@ -74,7 +77,10 @@ async function fetchAllOrders(sb: ReturnType<typeof getSupabaseServer>, mid: str
   return out;
 }
 
-async function fetchAllItems(sb: ReturnType<typeof getSupabaseServer>, mid: string): Promise<ItemRow[]> {
+async function fetchAllItems(
+  sb: ReturnType<typeof getSupabaseServer>,
+  mid: string,
+): Promise<ItemRow[]> {
   const out: ItemRow[] = [];
   let off = 0;
   for (;;) {
