@@ -164,16 +164,12 @@ export const Route = createFileRoute("/api/sync")({
           // SECURITY: If CLOVER_WEBHOOK_REQUIRE_SECRET=true, reject — do not
           // accept unsigned webhook requests in production. Leave it unset (or
           // set to 'false') in dev/sandbox to allow testing without a secret.
-          const requireSecret =
-            (process.env["CLOVER_WEBHOOK_REQUIRE_SECRET"] ?? "").toLowerCase();
+          const requireSecret = (process.env["CLOVER_WEBHOOK_REQUIRE_SECRET"] ?? "").toLowerCase();
           if (requireSecret === "true" || requireSecret === "1") {
             console.error(
               "[clover-webhook] CLOVER_WEBHOOK_SECRET not configured and CLOVER_WEBHOOK_REQUIRE_SECRET=true — rejecting.",
             );
-            return Response.json(
-              { error: "Webhook secret not configured" },
-              { status: 401 },
-            );
+            return Response.json({ error: "Webhook secret not configured" }, { status: 401 });
           }
           console.warn(
             "[clover-webhook] CLOVER_WEBHOOK_SECRET not set — accepting unverified webhook. " +
