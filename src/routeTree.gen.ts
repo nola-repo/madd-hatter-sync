@@ -18,6 +18,7 @@ import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as ApiSyncRouteImport } from './routes/api/sync'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
 import { Route as AuthenticatedAdminAnalyticsRouteImport } from './routes/_authenticated/admin.analytics'
+import { Route as AuthenticatedAdminAudienceBuilderRouteImport } from './routes/_authenticated/admin.audience-builder'
 import { Route as AuthenticatedAdminCategoriesRouteImport } from './routes/_authenticated/admin.categories'
 import { Route as AuthenticatedAdminCustomerPurchasesRouteImport } from './routes/_authenticated/admin.customer-purchases'
 import { Route as AuthenticatedAdminCustomersRouteImport } from './routes/_authenticated/admin.customers'
@@ -81,6 +82,12 @@ const AuthenticatedAdminAnalyticsRoute =
   AuthenticatedAdminAnalyticsRouteImport.update({
     id: '/analytics',
     path: '/analytics',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminAudienceBuilderRoute =
+  AuthenticatedAdminAudienceBuilderRouteImport.update({
+    id: '/audience-builder',
+    path: '/audience-builder',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
 const AuthenticatedAdminCategoriesRoute =
@@ -199,6 +206,7 @@ export interface FileRoutesByFullPath {
   '/api/health': typeof ApiHealthRoute
   '/api/sync': typeof ApiSyncRoute
   '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
+  '/admin/audience-builder': typeof AuthenticatedAdminAudienceBuilderRoute
   '/admin/categories': typeof AuthenticatedAdminCategoriesRoute
   '/admin/customer-purchases': typeof AuthenticatedAdminCustomerPurchasesRoute
   '/admin/customers': typeof AuthenticatedAdminCustomersRoute
@@ -227,6 +235,7 @@ export interface FileRoutesByTo {
   '/api/health': typeof ApiHealthRoute
   '/api/sync': typeof ApiSyncRoute
   '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
+  '/admin/audience-builder': typeof AuthenticatedAdminAudienceBuilderRoute
   '/admin/categories': typeof AuthenticatedAdminCategoriesRoute
   '/admin/customer-purchases': typeof AuthenticatedAdminCustomerPurchasesRoute
   '/admin/customers': typeof AuthenticatedAdminCustomersRoute
@@ -258,6 +267,7 @@ export interface FileRoutesById {
   '/api/health': typeof ApiHealthRoute
   '/api/sync': typeof ApiSyncRoute
   '/_authenticated/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
+  '/_authenticated/admin/audience-builder': typeof AuthenticatedAdminAudienceBuilderRoute
   '/_authenticated/admin/categories': typeof AuthenticatedAdminCategoriesRoute
   '/_authenticated/admin/customer-purchases': typeof AuthenticatedAdminCustomerPurchasesRoute
   '/_authenticated/admin/customers': typeof AuthenticatedAdminCustomersRoute
@@ -289,6 +299,7 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/api/sync'
     | '/admin/analytics'
+    | '/admin/audience-builder'
     | '/admin/categories'
     | '/admin/customer-purchases'
     | '/admin/customers'
@@ -317,6 +328,7 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/api/sync'
     | '/admin/analytics'
+    | '/admin/audience-builder'
     | '/admin/categories'
     | '/admin/customer-purchases'
     | '/admin/customers'
@@ -347,6 +359,7 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/api/sync'
     | '/_authenticated/admin/analytics'
+    | '/_authenticated/admin/audience-builder'
     | '/_authenticated/admin/categories'
     | '/_authenticated/admin/customer-purchases'
     | '/_authenticated/admin/customers'
@@ -445,6 +458,13 @@ declare module '@tanstack/react-router' {
       path: '/analytics'
       fullPath: '/admin/analytics'
       preLoaderRoute: typeof AuthenticatedAdminAnalyticsRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
+    '/_authenticated/admin/audience-builder': {
+      id: '/_authenticated/admin/audience-builder'
+      path: '/audience-builder'
+      fullPath: '/admin/audience-builder'
+      preLoaderRoute: typeof AuthenticatedAdminAudienceBuilderRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
     '/_authenticated/admin/categories': {
@@ -585,6 +605,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminAnalyticsRoute: typeof AuthenticatedAdminAnalyticsRoute
+  AuthenticatedAdminAudienceBuilderRoute: typeof AuthenticatedAdminAudienceBuilderRoute
   AuthenticatedAdminCategoriesRoute: typeof AuthenticatedAdminCategoriesRoute
   AuthenticatedAdminCustomerPurchasesRoute: typeof AuthenticatedAdminCustomerPurchasesRoute
   AuthenticatedAdminCustomersRoute: typeof AuthenticatedAdminCustomersRoute
@@ -605,6 +626,8 @@ interface AuthenticatedAdminRouteChildren {
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminAnalyticsRoute: AuthenticatedAdminAnalyticsRoute,
+  AuthenticatedAdminAudienceBuilderRoute:
+    AuthenticatedAdminAudienceBuilderRoute,
   AuthenticatedAdminCategoriesRoute: AuthenticatedAdminCategoriesRoute,
   AuthenticatedAdminCustomerPurchasesRoute:
     AuthenticatedAdminCustomerPurchasesRoute,

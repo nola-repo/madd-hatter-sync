@@ -43,6 +43,8 @@ import {
   searchCustomerPurchasesByItem,
   getSyncLogs,
 } from "./product-mapping.server";
+import { buildAudience, AUDIENCE_PRESETS } from "./audience-builder.server";
+import type { AudienceQuery } from "./audience-presets";
 import type { ConnectionStatus } from "./types";
 
 function setupRequiredResponse(e: unknown) {
@@ -748,4 +750,34 @@ export const getReconciliation = createServerFn({ method: "GET" }).handler(async
     if (isSetupRequired(e)) return setupRequiredResponse(e);
     throw e;
   }
+});
+
+// ---- Audience Builder --------------------------------------------------
+// Build a deduplicated outreach list using purchase/spending/visit criteria.
+
+export const buildAudienceFn = createServerFn({ method: "POST" })
+  .validator((data: AudienceQuery) => data)
+  .handler(async ({ data }) => {
+    await requireAdmin();
+    try {
+      const result = await buildAudience(data);
+      return { setupRequired: false as const, ...result };
+    } catch (e) {
+      if (isSetupRequired(e)) return setupRequiredResponse(e);
+      throw e;
+    }
+  });
+
+// Returns the list of built-in preset audience definitions (no DB query needed).
+export const getAudiencePresets = createServerFn({ method: "GET" }).handler(async () => {
+  await requireAdmin();
+  return {
+    setupRequired: false as const,
+    presets: AUDIENCE_PRESETS.map((p) => ({
+      id: p.id,
+      label: p.label,
+      description: p.description,
+      icon: p.icon,
+    })),
+  };
 });

@@ -24,6 +24,7 @@ import {
   PanelLeft,
   CheckCircle2,
   Shield,
+  Filter,
 } from "lucide-react";
 import { MaddHatterLogo } from "./brand-icon";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,7 @@ const PRIMARY_NAV: NavItem[] = [
   { to: "/admin/customers", label: "Customers", icon: Users },
   { to: "/admin/purchase-mapping", label: "Purchase Mapping", icon: Tag },
   { to: "/admin/analytics", label: "Analytics", icon: BarChart3 },
+  { to: "/admin/audience-builder", label: "Audience Builder", icon: Filter },
   { to: "/admin/logs", label: "Sync Logs", icon: Terminal },
   { to: "/admin/settings", label: "Settings", icon: Settings },
 ];
@@ -130,6 +132,7 @@ export function AdminShell({
     if (pathname.startsWith("/admin/customers")) return "Customers";
     if (pathname.startsWith("/admin/purchase-mapping")) return "Purchase Mapping";
     if (pathname.startsWith("/admin/analytics")) return "Analytics";
+    if (pathname.startsWith("/admin/audience-builder")) return "Audience Builder";
     if (pathname.startsWith("/admin/logs")) return "Sync Logs";
     if (pathname.startsWith("/admin/settings")) return "Settings";
     if (pathname.startsWith("/admin/transactions")) return "Transactions";
