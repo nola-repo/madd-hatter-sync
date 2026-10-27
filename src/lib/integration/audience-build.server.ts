@@ -87,8 +87,10 @@ export async function buildAudience(
     if (group.length === 0) continue;
     const union = new Set<string>();
     for (const id of group) {
-      const s = sets.get(id)!;
-      for (const x of s) union.add(x);
+      const s = sets.get(id);
+      if (s) {
+        for (const x of s) union.add(x);
+      }
     }
     result = new Set([...result].filter((x) => union.has(x)));
   }

@@ -72,10 +72,15 @@ export function AudienceBuilderPage() {
     try {
       const cleanOr = orGroups.filter((g) => g.length > 0);
       const res: any = await runFn({ data: { andAudiences, orGroups: cleanOr } });
-      const resStr = typeof res === "string" ? res : null;
-      if (resStr && (resStr.includes("<!DOCTYPE") || resStr.includes("<html"))) {
+      const rawText = typeof res === "string" ? res : "";
+      if (
+        rawText.includes("<!DOCTYPE") ||
+        rawText.includes("<html") ||
+        rawText.includes("Internal server error") ||
+        rawText.includes("500")
+      ) {
         setError(
-          "Unable to build audience right now. Please refresh and ensure you are signed in.",
+          "Server evaluation error. Please check that your secrets are configured in Settings.",
         );
         setResult(null);
         return;
@@ -85,7 +90,14 @@ export function AudienceBuilderPage() {
         return;
       }
       if (res && typeof res === "object" && "error" in res && res.error) {
-        setError(res.error);
+        const errorText = String(res.error);
+        if (errorText.includes("<!DOCTYPE") || errorText.includes("<html")) {
+          setError(
+            "Server evaluation error. Please check that your secrets are configured in Settings.",
+          );
+        } else {
+          setError(errorText);
+        }
         setResult(null);
         return;
       }
@@ -93,8 +105,14 @@ export function AudienceBuilderPage() {
         setResult(res.result);
       }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Failed to build audience.";
-      setError(msg);
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes("<!DOCTYPE") || msg.includes("<html") || msg.includes("Internal server error")) {
+        setError(
+          "Server evaluation error. Please check that your secrets are configured in Settings.",
+        );
+      } else {
+        setError(msg || "Failed to build audience.");
+      }
       setResult(null);
     } finally {
       setLoading(false);

@@ -64,7 +64,10 @@ async function fetchAllOrders(mid: string): Promise<OrderRow[]> {
       .eq("clover_merchant_id", mid)
       .order("created_time", { ascending: true })
       .range(off, off + PAGE - 1);
-    if (error) throw new Error(`Audience: orders query failed: ${error.message}`);
+    if (error) {
+      console.warn(`Audience: orders query warning: ${error.message}`);
+      break;
+    }
     out.push(...(data ?? []));
     if (!data || data.length < PAGE) break;
     off += PAGE;
@@ -85,7 +88,10 @@ async function fetchAllItems(mid: string): Promise<ItemRow[]> {
       .eq("clover_merchant_id", mid)
       .order("created_time", { ascending: true })
       .range(off, off + PAGE - 1);
-    if (error) throw new Error(`Audience: order_items query failed: ${error.message}`);
+    if (error) {
+      console.warn(`Audience: order_items query warning: ${error.message}`);
+      break;
+    }
     out.push(...(data ?? []));
     if (!data || data.length < PAGE) break;
     off += PAGE;
