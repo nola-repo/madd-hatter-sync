@@ -106,7 +106,11 @@ export function AudienceBuilderPage() {
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes("<!DOCTYPE") || msg.includes("<html") || msg.includes("Internal server error")) {
+      if (
+        msg.includes("<!DOCTYPE") ||
+        msg.includes("<html") ||
+        msg.includes("Internal server error")
+      ) {
         setError(
           "Server evaluation error. Please check that your secrets are configured in Settings.",
         );
