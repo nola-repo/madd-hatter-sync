@@ -393,8 +393,10 @@ export function AudienceBuilderPage() {
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 <span>
                   {typeof error === "string" &&
-                  (error.includes("<!DOCTYPE") || error.includes("<html"))
-                    ? "Server returned an error response. Please re-sign in or check your connection."
+                  (error.includes("<!DOCTYPE") ||
+                    error.includes("<html") ||
+                    error.includes("UNAUTHORIZED"))
+                    ? "Your session has expired or authentication is missing. Please sign in again."
                     : error}
                 </span>
               </div>
