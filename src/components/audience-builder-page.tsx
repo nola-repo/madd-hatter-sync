@@ -391,14 +391,12 @@ export function AudienceBuilderPage() {
             <div className="flex items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
-                <span>
-                  {typeof error === "string" &&
-                  (error.includes("<!DOCTYPE") ||
-                    error.includes("<html") ||
-                    error.includes("UNAUTHORIZED"))
-                    ? "Your session has expired or authentication is missing. Please sign in again."
-                    : error}
-                </span>
+                <span>{error}</span>
+                {error.toLowerCase().includes("session") && (
+                  <a href="/login" className="ml-2 font-bold underline hover:opacity-80">
+                    Go to Login →
+                  </a>
+                )}
               </div>
               <button
                 type="button"

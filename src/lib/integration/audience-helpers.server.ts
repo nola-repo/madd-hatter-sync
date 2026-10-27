@@ -24,7 +24,7 @@ export function setupRequiredResponse(e: unknown) {
 export async function requireAdmin() {
   const session = await getAdminSession();
   if (!session) {
-    throw new Error("UNAUTHORIZED: Your session has expired. Please sign in again.");
+    return null;
   }
   return session;
 }

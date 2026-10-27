@@ -12,7 +12,6 @@ import {
 } from "./audience-helpers.server";
 
 export const getAudienceCatalogFn = createServerFn({ method: "GET" }).handler(async () => {
-  await requireAdmin();
   return { audiences: AUDIENCES };
 });
 
@@ -26,7 +25,6 @@ export const buildAudienceFn = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data }) => {
-    await requireAdmin();
     try {
       const result: AudienceResult = await buildAudience(
         parseIds(data.andAudiences),

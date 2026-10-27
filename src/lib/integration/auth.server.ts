@@ -98,12 +98,11 @@ export function buildSessionCookie(accessToken: string, refreshToken: string): s
     access_token: accessToken,
     refresh_token: refreshToken,
     token_type: "bearer",
-    expires_in: 3600,
+    expires_in: 86400 * 7,
     user: null,
   });
-  // SameSite=Lax for normal first-party navigation. When accessed via direct domain,
-  // this is fully supported across all browsers. Secure is required on HTTPS.
-  return `sb-${ref}-auth-token=${encodeURIComponent(value)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=3600`;
+  // SameSite=Lax for normal first-party navigation. Max-Age=7 days so users aren't logged out hourly.
+  return `sb-${ref}-auth-token=${encodeURIComponent(value)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${86400 * 7}`;
 }
 
 export function buildLogoutCookie(): string {
