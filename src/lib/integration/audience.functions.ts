@@ -37,8 +37,16 @@ export const buildAudienceFn = createServerFn({ method: "POST" })
       console.error("Audience build error:", msg, e);
       return {
         setupRequired: false as const,
-        error: msg || "Failed to evaluate audience.",
-        result: null,
+        result: {
+          totalCustomers: 0,
+          marketingEligible: 0,
+          withPhone: 0,
+          withEmail: 0,
+          crmLinked: 0,
+          customers: [],
+          audienceSizes: {},
+          warnings: [`Audience build failed: ${msg}`],
+        },
       };
     }
   });
