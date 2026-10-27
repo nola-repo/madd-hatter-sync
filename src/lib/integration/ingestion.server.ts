@@ -157,9 +157,14 @@ async function createSyncRun(
 
 async function finishSyncRun(runId: string, patch: Record<string, any>) {
     const sb = getSupabaseServer();
+    const dbPatch: Record<string, any> = { finished_at: new Date().toISOString() };
+    for (const [k, v] of Object.entries(patch)) {
+        const snakeKey = k.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+        dbPatch[snakeKey] = v;
+    }
     const { error } = await sb
         .from("sync_runs")
-        .update({ ...patch, finished_at: new Date().toISOString() })
+        .update(dbPatch)
         .eq("id", runId);
     if (error) throw new Error(`finish sync_run: ${error.message}`);
 }

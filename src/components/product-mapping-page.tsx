@@ -2,306 +2,275 @@ import { useState, useEffect, useCallback } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { getProductMappingsFn } from "@/lib/integration/product-functions";
 import type { ProductMappingRow } from "@/lib/integration/product-mapping.server";
-
-function formatMoney(cents: number): string {
-    return cents > 0 ? `$${(cents / 100).toFixed(2)}` : "—";
-}
-
-const STATUS_STYLE: Record<string, { bg: string; color: string; label: string }> = {
-    synced: { bg: "#dcfce7", color: "#16a34a", label: "Synced" },
-    ready: { bg: "#cffafe", color: "#0891b2", label: "Ready" },
-    needs_review: { bg: "#fef9c3", color: "#92400e", label: "Needs Review" },
-    error: { bg: "#fee2e2", color: "#dc2626", label: "Error" },
-};
-
-const CATEGORY_STYLE: Record<string, { bg: string; color: string }> = {
-    default: { bg: "#f3f4f6", color: "#374151" },
-    drink: { bg: "#cffafe", color: "#0891b2" },
-    beer: { bg: "#fef9c3", color: "#92400e" },
-    food: { bg: "#fce7f3", color: "#be185d" },
-    wing: { bg: "#fee2e2", color: "#dc2626" },
-    shot: { bg: "#ede9fe", color: "#7c3aed" },
-    tequila: { bg: "#fef3c7", color: "#d97706" },
-};
-
-function getCatStyle(cat: string | null) {
-    if (!cat) return CATEGORY_STYLE.default;
-    const l = cat.toLowerCase();
-    for (const key of Object.keys(CATEGORY_STYLE)) {
-        if (l.includes(key)) return CATEGORY_STYLE[key]!;
-    }
-    return CATEGORY_STYLE.default;
-}
+import { PageHeader, EmptyState } from "@/components/page-header";
+import { TableSkeleton, MetricCardsSkeleton } from "@/components/ui/table-skeleton";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  PackageCheck,
+  RefreshCw,
+  Search,
+  Tag,
+  ShoppingBag,
+  Layers,
+  CheckCircle2,
+  Loader2,
+} from "lucide-react";
+import { money } from "@/lib/integration/format";
 
 export function ProductMappingPage() {
-    const [rows, setRows] = useState<ProductMappingRow[]>([]);
-    const [search, setSearch] = useState("");
-    const [categoryFilter, setCategoryFilter] = useState("all");
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+  const [rows, setRows] = useState<ProductMappingRow[]>([]);
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-    const fetchFn = useServerFn(getProductMappingsFn);
+  const fetchFn = useServerFn(getProductMappingsFn);
 
-    const load = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const res = await fetchFn();
-            if (res && "setupRequired" in res && res.setupRequired) {
-                setError("Integration not configured. Please complete setup in Settings.");
-                return;
-            }
-            const r = res as { products: ProductMappingRow[] };
-            setRows(r.products ?? []);
-        } catch (e: any) {
-            setError(e?.message ?? "Failed to load product mappings.");
-        } finally {
-            setLoading(false);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetchFn();
+      if (res && "setupRequired" in res && res.setupRequired) {
+        setError("Integration not configured. Please complete setup in Settings.");
+        return;
+      }
+      const r = res as { products: ProductMappingRow[] };
+      setRows(r.products ?? []);
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to load product mappings.");
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchFn]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const categories = Array.from(
+    new Set(rows.map((r) => r.categoryName).filter(Boolean)),
+  ).sort() as string[];
+
+  const filtered = rows.filter((r) => {
+    const matchSearch =
+      !search.trim() ||
+      r.itemName.toLowerCase().includes(search.toLowerCase()) ||
+      (r.categoryName ?? "").toLowerCase().includes(search.toLowerCase()) ||
+      r.purchaseTagName.toLowerCase().includes(search.toLowerCase());
+    const matchCat = categoryFilter === "all" || r.categoryName === categoryFilter;
+    return matchSearch && matchCat;
+  });
+
+  const withPurchases = rows.filter((r) => r.purchaseCount > 0).length;
+  const synced = rows.filter((r) => r.ghlMappingStatus === "synced").length;
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Product Mapping"
+        description="Clover inventory catalog cross-referenced with GoHighLevel purchase tagging rules."
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={load}
+            disabled={loading}
+            className="border-[#27272A] bg-[#141417] text-xs hover:bg-[#1E1E24]"
+          >
+            <RefreshCw
+              className={`mr-2 h-3.5 w-3.5 text-zinc-400 ${loading ? "animate-spin" : ""}`}
+            />
+            Refresh Catalog
+          </Button>
         }
-    }, [fetchFn]);
+      />
 
-    // Auto-load on mount
-    useEffect(() => { load(); }, [load]);
+      {/* Metrics */}
+      {loading ? (
+        <MetricCardsSkeleton count={4} />
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Card className="border-[#222226] bg-[#111113]">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between text-xs text-[#A1A1AA]">
+                <span>Total Catalog Products</span>
+                <PackageCheck className="h-4 w-4 text-zinc-400" />
+              </div>
+              <div className="mt-2 text-2xl font-bold font-mono text-white">{rows.length}</div>
+              <div className="mt-1 text-[11px] text-[#71717A]">Active Clover items</div>
+            </CardContent>
+          </Card>
 
-    // Unique categories for filter
-    const categories = Array.from(new Set(rows.map((r) => r.categoryName).filter(Boolean))).sort() as string[];
+          <Card className="border-[#222226] bg-[#111113]">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between text-xs text-[#A1A1AA]">
+                <span>Items with Sales</span>
+                <ShoppingBag className="h-4 w-4 text-emerald-400" />
+              </div>
+              <div className="mt-2 text-2xl font-bold font-mono text-emerald-400">
+                {withPurchases}
+              </div>
+              <div className="mt-1 text-[11px] text-[#71717A]">Purchased at least once</div>
+            </CardContent>
+          </Card>
 
-    const filtered = rows.filter((r) => {
-        const matchSearch = !search.trim() ||
-            r.itemName.toLowerCase().includes(search.toLowerCase()) ||
-            (r.categoryName ?? "").toLowerCase().includes(search.toLowerCase()) ||
-            r.purchaseTagName.toLowerCase().includes(search.toLowerCase());
-        const matchCat = categoryFilter === "all" || r.categoryName === categoryFilter;
-        return matchSearch && matchCat;
-    });
+          <Card className="border-[#222226] bg-[#111113]">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between text-xs text-[#A1A1AA]">
+                <span>Active Categories</span>
+                <Layers className="h-4 w-4 text-blue-400" />
+              </div>
+              <div className="mt-2 text-2xl font-bold font-mono text-blue-400">
+                {categories.length}
+              </div>
+              <div className="mt-1 text-[11px] text-[#71717A]">Menu groups classified</div>
+            </CardContent>
+          </Card>
 
-    const withPurchases = rows.filter((r) => r.purchaseCount > 0).length;
-    const synced = rows.filter((r) => r.ghlMappingStatus === "synced").length;
-
-    return (
-        <div style={{ padding: "28px 32px", fontFamily: "'Inter', system-ui, sans-serif", color: "#111827" }}>
-            {/* Header */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, flexWrap: "wrap", gap: 12 }}>
-                <div>
-                    <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#111827" }}>Product Mapping</h1>
-                    <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6b7280" }}>
-                        Full Clover inventory catalog with GHL purchase tag mappings
-                    </p>
-                </div>
-                <button
-                    onClick={load}
-                    disabled={loading}
-                    style={{
-                        background: "#fff",
-                        border: "1px solid #d1d5db",
-                        borderRadius: 8,
-                        padding: "7px 16px",
-                        fontSize: 13,
-                        color: "#374151",
-                        fontWeight: 600,
-                        cursor: loading ? "wait" : "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 6,
-                    }}
-                >
-                    <span style={{ display: "inline-block", animation: loading ? "spin 1s linear infinite" : "none" }}>↻</span>
-                    {loading ? "Refreshing…" : "Refresh"}
-                </button>
-            </div>
-
-            {/* Stats */}
-            <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-                {[
-                    { label: "Total Products", value: rows.length, sub: "from Clover", color: "#111827" },
-                    { label: "With Purchases", value: withPurchases, sub: "sold at least once", color: "#7c3aed" },
-                    { label: "Categories", value: categories.length, color: "#0891b2" },
-                    { label: "Synced to GHL", value: synced, sub: "tag mappings", color: "#16a34a" },
-                    { label: "Ready to Tag", value: rows.length - synced, color: "#d97706" },
-                ].map((s) => (
-                    <div
-                        key={s.label}
-                        style={{
-                            flex: "1 1 130px",
-                            background: "#fff",
-                            border: "1px solid #e5e7eb",
-                            borderRadius: 10,
-                            padding: "14px 18px",
-                            boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-                        }}
-                    >
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>{s.label}</div>
-                        <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
-                        {s.sub && <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2 }}>{s.sub}</div>}
-                    </div>
-                ))}
-            </div>
-
-            {/* Filters */}
-            <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-                <input
-                    type="text"
-                    placeholder="Filter by product name, category, or GHL tag…"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    style={{
-                        flex: "1 1 260px",
-                        maxWidth: 400,
-                        border: "1px solid #d1d5db",
-                        borderRadius: 8,
-                        padding: "8px 14px",
-                        fontSize: 13,
-                        color: "#111827",
-                        outline: "none",
-                        background: "#fff",
-                    }}
-                />
-                <select
-                    value={categoryFilter}
-                    onChange={(e) => setCategoryFilter(e.target.value)}
-                    style={{
-                        border: "1px solid #d1d5db",
-                        borderRadius: 8,
-                        padding: "8px 32px 8px 12px",
-                        fontSize: 13,
-                        color: categoryFilter === "all" ? "#6b7280" : "#111827",
-                        background: "#fff",
-                        cursor: "pointer",
-                        minWidth: 180,
-                        outline: "none",
-                        appearance: "none",
-                        backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
-                        backgroundRepeat: "no-repeat",
-                        backgroundPosition: "right 10px center",
-                    }}
-                >
-                    <option value="all">All Categories</option>
-                    {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-                {(search || categoryFilter !== "all") && (
-                    <span style={{ fontSize: 12, color: "#6b7280" }}>
-                        {filtered.length} of {rows.length} products
-                        <button
-                            onClick={() => { setSearch(""); setCategoryFilter("all"); }}
-                            style={{ marginLeft: 6, fontSize: 11, color: "#6b7280", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
-                        >
-                            clear
-                        </button>
-                    </span>
-                )}
-            </div>
-
-            {/* Error */}
-            {error && (
-                <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", color: "#dc2626", fontSize: 13, marginBottom: 16 }}>
-                    ⚠️ {error}
-                </div>
-            )}
-
-            {/* Table */}
-            <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                        <tr style={{ borderBottom: "1px solid #f3f4f6", background: "#f9fafb" }}>
-                            {[
-                                { label: "Product", align: "left" },
-                                { label: "Category", align: "left" },
-                                { label: "Price", align: "right" },
-                                { label: "Sold", align: "center" },
-                                { label: "GHL Tag Name", align: "left" },
-                                { label: "Status", align: "left" },
-                            ].map((h) => (
-                                <th
-                                    key={h.label}
-                                    style={{
-                                        padding: "10px 16px",
-                                        textAlign: h.align as any,
-                                        fontSize: 11,
-                                        fontWeight: 700,
-                                        color: "#6b7280",
-                                        textTransform: "uppercase",
-                                        letterSpacing: "0.06em",
-                                    }}
-                                >
-                                    {h.label}
-                                </th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading && (
-                            <tr>
-                                <td colSpan={6} style={{ padding: "40px 16px", textAlign: "center", color: "#9ca3af", fontSize: 14 }}>
-                                    Loading product catalog…
-                                </td>
-                            </tr>
-                        )}
-                        {!loading && filtered.length === 0 && (
-                            <tr>
-                                <td colSpan={6} style={{ padding: "40px 16px", textAlign: "center", color: "#9ca3af", fontSize: 14 }}>
-                                    {rows.length === 0 ? "No products found. Run a Clover sync to populate the catalog." : `No products match the current filters.`}
-                                </td>
-                            </tr>
-                        )}
-                        {!loading && filtered.map((row) => {
-                            const catStyle = getCatStyle(row.categoryName);
-                            const st = STATUS_STYLE[row.ghlMappingStatus] ?? { bg: "#f3f4f6", color: "#6b7280", label: row.ghlMappingStatus };
-                            return (
-                                <tr
-                                    key={row.cloverItemId}
-                                    style={{ borderBottom: "1px solid #f3f4f6" }}
-                                    onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#f9fafb")}
-                                    onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "")}
-                                >
-                                    <td style={{ padding: "11px 16px" }}>
-                                        <div style={{ fontSize: 13, fontWeight: 600, color: "#111827" }}>{row.itemName}</div>
-                                        <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 2, fontFamily: "monospace" }}>{row.cloverItemId}</div>
-                                    </td>
-                                    <td style={{ padding: "11px 16px" }}>
-                                        {row.categoryName ? (
-                                            <span style={{ background: catStyle.bg, color: catStyle.color, borderRadius: 20, padding: "2px 10px", fontSize: 11, fontWeight: 500, whiteSpace: "nowrap" }}>
-                                                {row.categoryName}
-                                            </span>
-                                        ) : (
-                                            <span style={{ fontSize: 11, color: "#9ca3af", fontStyle: "italic" }}>Uncategorized</span>
-                                        )}
-                                    </td>
-                                    <td style={{ padding: "11px 16px", textAlign: "right" }}>
-                                        <span style={{ fontSize: 13, fontWeight: 600, color: "#16a34a" }}>{formatMoney(row.priceCents)}</span>
-                                    </td>
-                                    <td style={{ padding: "11px 16px", textAlign: "center" }}>
-                                        <span style={{
-                                            display: "inline-flex", alignItems: "center", gap: 4,
-                                            background: row.purchaseCount > 0 ? "#ede9fe" : "#f3f4f6",
-                                            color: row.purchaseCount > 0 ? "#7c3aed" : "#9ca3af",
-                                            borderRadius: 20, padding: "2px 10px", fontSize: 12, fontWeight: 700,
-                                        }}>
-                                            {row.purchaseCount > 0 ? "🛒 " : ""}{row.purchaseCount}
-                                        </span>
-                                    </td>
-                                    <td style={{ padding: "11px 16px" }}>
-                                        <div style={{
-                                            background: "#f9fafb", border: "1px solid #e5e7eb",
-                                            borderRadius: 6, padding: "3px 8px", fontSize: 11,
-                                            fontFamily: "monospace", color: "#374151",
-                                            maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                                        }} title={row.purchaseTagName}>
-                                            {row.purchaseTagName}
-                                        </div>
-                                    </td>
-                                    <td style={{ padding: "11px 16px" }}>
-                                        <span style={{ background: st.bg, color: st.color, borderRadius: 20, padding: "2px 10px", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>
-                                            {st.label}
-                                        </span>
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
-            </div>
-
-            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+          <Card className="border-[#222226] bg-[#111113]">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between text-xs text-[#A1A1AA]">
+                <span>GHL Tag Mappings</span>
+                <Tag className="h-4 w-4 text-purple-400" />
+              </div>
+              <div className="mt-2 text-2xl font-bold font-mono text-white">
+                {synced} / {rows.length}
+              </div>
+              <div className="mt-1 text-[11px] text-[#71717A]">Normalized purchase tags</div>
+            </CardContent>
+          </Card>
         </div>
-    );
+      )}
+
+      {error && (
+        <Card className="border-red-900/50 bg-red-950/20 text-red-200">
+          <CardContent className="p-4 text-xs font-mono">{error}</CardContent>
+        </Card>
+      )}
+
+      {/* Main Table Card */}
+      <Card className="border-[#222226] bg-[#111113] shadow-lg">
+        <CardHeader className="pb-3 border-b border-[#1E1E22]">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <CardTitle className="text-sm font-semibold text-white font-display">
+              Tag Rule Specifications ({filtered.length})
+            </CardTitle>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#71717A]" />
+                <Input
+                  placeholder="Filter product, tag or category…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="h-8 w-56 pl-8 border-[#27272A] bg-[#141417] text-xs text-white"
+                />
+              </div>
+
+              {categories.length > 0 && (
+                <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v)}>
+                  <SelectTrigger className="h-8 w-[150px] border-[#27272A] bg-[#141417] text-xs text-white">
+                    <SelectValue placeholder="All Categories" />
+                  </SelectTrigger>
+                  <SelectContent className="border-[#27272A] bg-[#141417] text-white">
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {categories.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {loading ? (
+            <TableSkeleton rowCount={8} columnCount={6} />
+          ) : filtered.length === 0 ? (
+            <div className="p-8 text-center">
+              <EmptyState
+                title="No products found"
+                description="Adjust your filters or trigger a sync from Settings."
+              />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-[#1E1E22] bg-[#0E0E10] text-[#71717A]">
+                    <th className="py-3 px-4 font-medium">Product Name & ID</th>
+                    <th className="py-3 px-4 font-medium">Category</th>
+                    <th className="py-3 px-4 text-right font-medium">Price</th>
+                    <th className="py-3 px-4 text-center font-medium">Sold</th>
+                    <th className="py-3 px-4 font-medium">CRM Purchase Tag</th>
+                    <th className="py-3 px-4 text-right font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#1A1A1E]">
+                  {filtered.map((row) => (
+                    <tr key={row.cloverItemId} className="hover:bg-[#161619] transition-colors">
+                      <td className="py-3 px-4">
+                        <div className="font-semibold text-white">{row.itemName}</div>
+                        <div className="font-mono text-[10px] text-[#71717A]">
+                          {row.cloverItemId}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        {row.categoryName ? (
+                          <Badge
+                            variant="outline"
+                            className="border-zinc-700 bg-zinc-900/60 text-[10px]"
+                          >
+                            {row.categoryName}
+                          </Badge>
+                        ) : (
+                          <span className="text-[#52525B]">Uncategorized</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono text-[#D4D4D8]">
+                        {money(row.priceCents)}
+                      </td>
+                      <td className="py-3 px-4 text-center font-mono font-medium text-white">
+                        {row.purchaseCount}
+                      </td>
+                      <td className="py-3 px-4 font-mono text-[11px]">
+                        <span className="inline-block px-2 py-0.5 rounded-md bg-[#18181B] border border-[#27272A] text-zinc-300 truncate max-w-[240px]">
+                          {row.purchaseTagName}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <Badge
+                          variant="outline"
+                          className={
+                            row.ghlMappingStatus === "synced"
+                              ? "border-emerald-800/40 bg-emerald-950/40 text-emerald-400 text-[10px]"
+                              : "border-zinc-800 bg-zinc-900 text-zinc-400 text-[10px]"
+                          }
+                        >
+                          {row.ghlMappingStatus}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
 }

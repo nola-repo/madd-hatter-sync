@@ -4,6 +4,7 @@ import { syncOrderToGhl } from "@/lib/integration/sync.server";
 import { processPendingPurchases } from "@/lib/integration/purchase-ops.server";
 import { getIntegrationConfig } from "@/lib/integration/config.server";
 import { getSupabaseServer } from "@/lib/integration/supabase.server";
+import { sendSyncAlert } from "@/lib/integration/alert.server";
 
 // -------------------------------------------------------------------------
 // /api/sync — Sync entry point for cron-job.org and Clover webhooks
@@ -217,6 +218,12 @@ async function stepPush(limit = 25) {
 // ---- Failure logging to Supabase ----------------------------------------
 
 async function logFailure(e: any) {
+    await sendSyncAlert({
+        level: "error",
+        title: "Madd Hatter Sync Failed",
+        detail: e?.message ?? String(e),
+        context: { timestamp: new Date().toISOString() },
+    });
     try {
         const sb = getSupabaseServer();
         const cfg = getIntegrationConfig();
