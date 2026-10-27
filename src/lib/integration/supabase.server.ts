@@ -5,16 +5,16 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getIntegrationConfig } from "./config.server";
 
-let cachedClient: SupabaseClient | null = null;
-
+// FIX #14: Removed module-level singleton cache. In serverless/edge environments
+// (Cloudflare Workers, Nitro) module state can persist across warm invocations:
+// a cached client built with a rotated secret silently uses stale credentials.
+// The Supabase client is lightweight to construct — per-call creation is safe.
 export function getSupabaseServer(): SupabaseClient {
-    if (cachedClient) return cachedClient;
     const cfg = getIntegrationConfig();
     // Server-only: uses the secret key. Never import this from client code.
-    cachedClient = createClient(cfg.supabase.url, cfg.supabase.secretKey, {
+    return createClient(cfg.supabase.url, cfg.supabase.secretKey, {
         auth: { persistSession: false, autoRefreshToken: false },
     });
-    return cachedClient;
 }
 
 export function getSupabaseAnon(): SupabaseClient {

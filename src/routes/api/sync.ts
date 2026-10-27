@@ -22,6 +22,8 @@ import { getSupabaseServer } from "@/lib/integration/supabase.server";
 //
 // CLOVER WEBHOOK (POST):
 //   Configure webhook URL in Clover Dashboard → App Settings → Webhooks.
+//   Set CLOVER_WEBHOOK_SECRET to the secret configured in the Clover dashboard
+//   for HMAC-SHA256 signature verification.
 // -------------------------------------------------------------------------
 
 export const Route = createFileRoute("/api/sync")({
@@ -32,7 +34,7 @@ export const Route = createFileRoute("/api/sync")({
                 const url = new URL(request.url);
                 const secret = url.searchParams.get("secret");
                 const step = url.searchParams.get("step"); // "fetch" | "push" | null (both)
-                
+
                 const batchLimit = Math.min(
                     50,
                     Math.max(1, parseInt(url.searchParams.get("limit") ?? "10", 10) || 10),
@@ -40,7 +42,8 @@ export const Route = createFileRoute("/api/sync")({
 
                 const cfg = getIntegrationConfig();
 
-                // Validate the secret
+                // FIX #21: Use properly typed cfg.clover.webhookSecret (was cfg.clover.webhookSecret
+                // which didn't exist on the type — now it does, and SYNC_SECRET still takes priority).
                 const expectedSecret = process.env.SYNC_SECRET ?? cfg.clover.webhookSecret ?? "";
                 if (expectedSecret && secret !== expectedSecret) {
                     return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -84,15 +87,34 @@ export const Route = createFileRoute("/api/sync")({
                 try {
                     const cfg = getIntegrationConfig();
 
-                    const cloverSecret = process.env.CLOVER_WEBHOOK_SECRET ?? cfg.clover.webhookSecret ?? "";
+                    // FIX #9: Read the raw body FIRST (before .json()) so we can verify the HMAC.
+                    const rawBody = await request.text();
+
+                    // FIX #9: Validate the Clover HMAC-SHA256 webhook signature if a secret is
+                    // configured. Previously the signature was read but NEVER verified — any caller
+                    // could POST arbitrary order IDs and trigger GHL sync operations.
+                    const cloverSecret = cfg.clover.webhookSecret ?? "";
                     if (cloverSecret) {
                         const sig = request.headers.get("x-clover-hmac-sha256") ?? "";
-                        if (!sig) console.warn("[clover-webhook] No HMAC signature in request.");
+                        if (!sig) {
+                            console.warn("[clover-webhook] Request missing HMAC signature — rejecting.");
+                            return Response.json({ error: "Missing webhook signature" }, { status: 401 });
+                        }
+                        const valid = await verifyCloverWebhookSignature(cloverSecret, rawBody, sig);
+                        if (!valid) {
+                            console.warn("[clover-webhook] Invalid HMAC signature — rejecting.");
+                            return Response.json({ error: "Invalid webhook signature" }, { status: 401 });
+                        }
+                    } else {
+                        console.warn(
+                            "[clover-webhook] CLOVER_WEBHOOK_SECRET not set \u2014 skipping signature verification. " +
+                            "Set it in your environment secrets for production security.",
+                        );
                     }
 
                     let body: any;
                     try {
-                        body = await request.json();
+                        body = JSON.parse(rawBody);
                     } catch {
                         return Response.json({ error: "Invalid JSON body" }, { status: 400 });
                     }
@@ -108,15 +130,18 @@ export const Route = createFileRoute("/api/sync")({
                     }
 
                     // For payment events: run a quick Clover fetch to pick up new paid orders
-                    if (eventType === "PAYMENT" || eventType.includes("PAYMENT")) {
+                    if (eventType === "PAYMENT" || eventType.startsWith("PAYMENT")) {
                         await stepFetch();
                         // Push a small batch immediately
                         await stepPush(10);
                         return Response.json({ ok: true, action: "fetch_and_push", event: eventType });
                     }
 
-                    // For order events: sync this specific order immediately
-                    if (eventType === "ORDER" || eventType.includes("ORDER") || objectId.length > 0) {
+                    // FIX #10: Only handle ORDER events in the order-sync branch.
+                    // Previously `|| objectId.length > 0` caused ALL webhook events (PAYMENT,
+                    // CUSTOMER, INVENTORY etc.) to route here, calling syncOrderToGhl with
+                    // non-order IDs and generating confusing 404 errors in the logs.
+                    if (eventType === "ORDER" || eventType.startsWith("ORDER_")) {
                         const result = await syncOrderToGhl(objectId).catch((e) => ({
                             outcome: "error" as const,
                             error: e?.message ?? String(e),
@@ -144,7 +169,8 @@ export const Route = createFileRoute("/api/sync")({
                         });
                     }
 
-                    // Unknown event: run small fetch+push
+                    // Unknown / unhandled event type: run a small fetch+push to stay current.
+                    console.log(`[clover-webhook] Unhandled event type "${eventType}" \u2014 running small fetch+push.`);
                     await stepFetch();
                     await stepPush(10);
                     return Response.json({ ok: true, action: "fallback_sync", event: eventType });
@@ -205,4 +231,46 @@ async function logFailure(e: any) {
     } catch (dbErr) {
         console.error("[sync] Failed to write failure record to DB:", dbErr);
     }
+}
+
+// ---- FIX #9: HMAC-SHA256 signature verification -------------------------
+
+/**
+ * Verify a Clover webhook HMAC-SHA256 signature using the Web Crypto API.
+ * Compatible with both Node.js (>=18) and Cloudflare Workers edge runtimes.
+ *
+ * Clover signs the raw request body with the webhook secret using HMAC-SHA256
+ * and base64-encodes the result into the x-clover-hmac-sha256 header.
+ */
+async function verifyCloverWebhookSignature(
+    secret: string,
+    rawBody: string,
+    signature: string,
+): Promise<boolean> {
+    try {
+        const encoder = new TextEncoder();
+        const key = await crypto.subtle.importKey(
+            "raw",
+            encoder.encode(secret),
+            { name: "HMAC", hash: "SHA-256" },
+            false,
+            ["sign"],
+        );
+        const expectedBuf = await crypto.subtle.sign("HMAC", key, encoder.encode(rawBody));
+        const expectedB64 = btoa(String.fromCharCode(...new Uint8Array(expectedBuf)));
+        // Timing-safe string comparison to prevent timing-oracle attacks.
+        return timingSafeEqual(expectedB64, signature);
+    } catch {
+        return false;
+    }
+}
+
+/** Constant-time string comparison to mitigate timing attacks. */
+function timingSafeEqual(a: string, b: string): boolean {
+    if (a.length !== b.length) return false;
+    let diff = 0;
+    for (let i = 0; i < a.length; i++) {
+        diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    }
+    return diff === 0;
 }

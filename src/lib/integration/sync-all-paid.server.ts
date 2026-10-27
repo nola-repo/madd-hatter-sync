@@ -29,6 +29,9 @@ export async function syncAllPaidOrders(limit = 200): Promise<SyncAllPaidResult>
         .from("orders")
         .select("clover_order_id")
         .eq("payment_status", "PAID")
+        // FIX #5: Exclude already-synced orders. Previously ALL paid orders were
+        // re-queued every run, burning the time budget on lock cycles for done work.
+        .in("status", ["pending", "error", "partial", "held_for_review"])
         .order("created_time", { ascending: false })
         .limit(limit);
 

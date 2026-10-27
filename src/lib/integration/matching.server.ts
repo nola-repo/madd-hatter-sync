@@ -213,12 +213,13 @@ export async function matchCustomer(order: CloverOrder): Promise<CustomerMatchPr
         };
     }
 
-    // 3. No match and we have usable identifying info, but we NEVER create contacts.
-    // Return held_for_review so the preview accurately reflects what sync will do.
+    // 3. No match — the sync path will auto-create a GHL contact to preserve
+    //    the purchase. Preview accurately reflects this so users aren't surprised.
+    //    (FIX #13: was incorrectly labelled "held_for_review" in the preview UI.)
     if (email || phone) {
         return {
-            decision: "held_for_review",
-            reason: "No existing GHL contact found for this customer. Order will be held for review — no contact will be created automatically.",
+            decision: "auto_create",
+            reason: "No existing GHL contact found. Sync will automatically create one so no purchase data is lost.",
             ghlContactId: null,
             candidates: [],
         };

@@ -41,25 +41,37 @@ class CloverApiError extends Error {
     }
 }
 
-async function cloverGet(path: string): Promise<any> {
+// FIX #16: Added exponential backoff retry on Clover 429 (rate-limit) responses.
+async function cloverGet(path: string, maxRetries = 3): Promise<any> {
     const cfg = getIntegrationConfig();
     const token = cfg.clover.apiKey.trim();
-    let res = await fetch(`${cfg.clover.apiBase}${path}`, {
-        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-    });
-    if (res.status === 401) {
-        const sep = path.includes("?") ? "&" : "?";
-        res = await fetch(
-            `${cfg.clover.apiBase}${path}${sep}access_token=${encodeURIComponent(token)}`,
-            { headers: { Accept: "application/json" } },
-        );
-    }
-    const text = await res.text();
-    if (!res.ok) throw new CloverApiError(res.status, text);
-    try {
-        return text ? JSON.parse(text) : null;
-    } catch {
-        return null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        let res = await fetch(`${cfg.clover.apiBase}${path}`, {
+            headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        });
+        if (res.status === 401) {
+            const sep = path.includes("?") ? "&" : "?";
+            res = await fetch(
+                `${cfg.clover.apiBase}${path}${sep}access_token=${encodeURIComponent(token)}`,
+                { headers: { Accept: "application/json" } },
+            );
+        }
+        // Rate-limit: wait and retry with exponential backoff.
+        if (res.status === 429 && attempt < maxRetries) {
+            const retryAfterSec = parseInt(res.headers.get("retry-after") ?? "2", 10);
+            const delayMs = Math.min((retryAfterSec || Math.pow(2, attempt + 1)) * 1000, 16_000);
+            console.warn(`[cloverGet] 429 rate-limited on attempt ${attempt + 1}/${maxRetries + 1}. Retrying in ${delayMs}ms.`);
+            await new Promise((r) => setTimeout(r, delayMs));
+            continue;
+        }
+        const text = await res.text();
+        if (!res.ok) throw new CloverApiError(res.status, text);
+        try {
+            return text ? JSON.parse(text) : null;
+        } catch {
+            return null;
+        }
     }
 }
 
@@ -243,18 +255,17 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
                     ? Math.round(Number(v))
                     : 0;
 
-    // 1. Categories
+    // 1. Categories — fetched ONCE; catNameMap is built from the same result.
+    // FIX #4: was fetched twice (once to upsert, once to build the name map).
+    const catNameMap = new Map<string, string>();
     await safe("categories", async () => {
         const { elements: cats } = await cloverPaginate(`/v3/merchants/${merchantId}/categories`);
         counters.categoriesFetched = cats.length;
-        for (const cat of cats) await upsertCategory(merchantId, cat);
+        for (const cat of cats) {
+            await upsertCategory(merchantId, cat);
+            if (cat.id && cat.name) catNameMap.set(cat.id, cat.name);
+        }
         counters.categoriesUpserted = cats.length;
-    });
-
-    const catNameMap = new Map<string, string>();
-    await safe("category-names", async () => {
-        const { elements: cats } = await cloverPaginate(`/v3/merchants/${merchantId}/categories`);
-        for (const cat of cats) if (cat.id && cat.name) catNameMap.set(cat.id, cat.name);
     });
 
     // 2. Products
@@ -502,8 +513,14 @@ export async function refreshPosData(opts: RefreshOptions = {}): Promise<SyncRun
         await processPendingPurchases(300);
     });
 
+    // FIX #22: Report "failed" if nothing was upserted AND there were errors.
+    // Previously "completed" was returned as long as at least one order succeeded,
+    // masking mass-failure scenarios. The threshold is now: if errors exceed
+    // successfully upserted orders the run is considered failed.
     const status: "completed" | "failed" =
-        errors.length > 0 && counters.ordersUpserted === 0 ? "failed" : "completed";
+        errors.length > 0 && (counters.ordersUpserted === 0 || errors.length > counters.ordersUpserted)
+            ? "failed"
+            : "completed";
 
     await finishSyncRun(runId, { status, ...counters, errors: JSON.stringify(errors) });
 

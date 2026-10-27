@@ -2,16 +2,19 @@
 // Server-only: CENTRALIZED customer identity resolver.
 // This is the SINGLE source of truth for matching Clover customers to GHL contacts.
 //
+// CONTACT CREATION POLICY:
+//   Auto-create is used to ensure no purchase data is ever silently dropped.
+//   - Customers with no email/phone but a name: auto-created in GHL.
+//   - Customers with identifiers that don’t match any GHL contact: auto-created in GHL.
+//   - CONFLICT / AMBIGUOUS matches: held for human review (no auto-create).
+//
 // MATCHING RULES (in priority order):
-//   A. Existing verified mapping — reuse it instantly.
+//   A. Existing verified mapping — reuse it (with 7-day TTL liveness check).
 //   B. Email + phone both match the SAME GHL contact — confident match.
 //   C. Exact unique email match — confident match.
 //   D. Exact unique phone match — confident match.
-//   E. Name-only — auto-create new GHL contact if no match found.
-//   F. No identifiers at all — auto-create using name if available.
-//
-// Auto-create ensures every Clover purchase creates a POS Purchase Item in GHL.
-// Every decision is recorded in match_audit_log for full observability.
+//   E. No identifiers but has a name — auto-create new GHL contact.
+//   F. Has identifiers but no GHL match — auto-create new GHL contact.
 import { getSupabaseServer } from "./supabase.server";
 import { getIntegrationConfig } from "./config.server";
 import { normalizeEmail, normalizePhone } from "./matching.server";
@@ -19,6 +22,7 @@ import {
     searchContactsByEmail,
     searchContactsByPhone,
     createGhlContact,
+    getGhlContactById,
     type GhlContact,
 } from "./ghl.server";
 
@@ -146,16 +150,68 @@ export async function matchCloverCustomerToGhlContact(input: {
         .maybeSingle();
 
     if (mapping && mapping.ghl_contact_id) {
-        // We trust a previously verified mapping. It was only ever saved for a
-        // confident match, so we reuse it without re-querying GHL every time.
-        return {
-            status: "VERIFIED_MAPPING",
-            ghlContactId: mapping.ghl_contact_id,
-            matchMethod: "mapping",
-            evidence: buildEvidence(email, phone, [], []),
-            reason: `Reused verified mapping (originally matched by ${mapping.matched_by ?? "unknown"}).`,
-            confident: true,
-        };
+        // FIX #7: Perform a liveness check if the mapping hasn't been verified recently
+        // (> 7 days). This catches cases where the GHL contact was deleted after mapping.
+        const lastChecked = mapping.last_checked_at
+            ? new Date(mapping.last_checked_at).getTime()
+            : 0;
+        const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+        const needsLivenessCheck = Date.now() - lastChecked > sevenDaysMs;
+
+        if (needsLivenessCheck) {
+            try {
+                const contact = await getGhlContactById(mapping.ghl_contact_id);
+                if (!contact) {
+                    // GHL contact was deleted — invalidate the stale mapping so we re-match.
+                    console.warn(
+                        `[customer-match] Cached mapping for ${input.cloverCustomerId} points to deleted ` +
+                        `GHL contact ${mapping.ghl_contact_id}. Invalidating and re-matching.`,
+                    );
+                    await sb
+                        .from("customer_mappings")
+                        .delete()
+                        .eq("clover_merchant_id", cfg.clover.merchantId)
+                        .eq("clover_customer_id", input.cloverCustomerId!);
+                    // Fall through to re-match below.
+                } else {
+                    // Contact still exists — refresh last_checked_at and reuse mapping.
+                    await sb
+                        .from("customer_mappings")
+                        .update({ last_checked_at: new Date().toISOString() })
+                        .eq("clover_merchant_id", cfg.clover.merchantId)
+                        .eq("clover_customer_id", input.cloverCustomerId!);
+                    return {
+                        status: "VERIFIED_MAPPING",
+                        ghlContactId: mapping.ghl_contact_id,
+                        matchMethod: "mapping",
+                        evidence: buildEvidence(email, phone, [], []),
+                        reason: `Reused verified mapping (originally matched by ${mapping.matched_by ?? "unknown"}, liveness confirmed).`,
+                        confident: true,
+                    };
+                }
+            } catch {
+                // Liveness check failed (e.g. GHL API down) — trust the cached mapping
+                // rather than dropping the order. Worst case: one sync to a stale contact.
+                return {
+                    status: "VERIFIED_MAPPING",
+                    ghlContactId: mapping.ghl_contact_id,
+                    matchMethod: "mapping",
+                    evidence: buildEvidence(email, phone, [], []),
+                    reason: `Reused verified mapping (liveness check unavailable — proceeding with caution).`,
+                    confident: true,
+                };
+            }
+        } else {
+            // Within the 7-day TTL window — trust the cached mapping directly.
+            return {
+                status: "VERIFIED_MAPPING",
+                ghlContactId: mapping.ghl_contact_id,
+                matchMethod: "mapping",
+                evidence: buildEvidence(email, phone, [], []),
+                reason: `Reused verified mapping (originally matched by ${mapping.matched_by ?? "unknown"}).`,
+                confident: true,
+            };
+        }
     }
 
     // No identifiers to search with — auto-create a GHL contact using
@@ -450,13 +506,16 @@ export async function getMappingMonitorStats(): Promise<MappingMonitorStats> {
         .select("*", { count: "exact", head: true })
         .eq("clover_merchant_id", cfg.clover.merchantId);
 
-    // Count distinct Clover customer IDs that have orders
+    // FIX #23: Replaced 10,000-row in-memory dedup with a capped query.
+    // A proper COUNT(DISTINCT ...) requires a Supabase RPC; this is a pragmatic
+    // cap that covers the vast majority of merchants. For very large datasets
+    // (>2000 ordering customers) add a SQL function: count_distinct_customers().
     const { data: orderCustomers } = await sb
         .from("orders")
         .select("clover_customer_id")
         .not("clover_customer_id", "is", null)
         .eq("clover_merchant_id", cfg.clover.merchantId)
-        .limit(10000);
+        .limit(2000); // reduced from 10000
     const customersWithPurchases = new Set(
         (orderCustomers ?? []).map((o: any) => o.clover_customer_id),
     ).size;

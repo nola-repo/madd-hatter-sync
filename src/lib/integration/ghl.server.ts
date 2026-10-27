@@ -459,7 +459,9 @@ export async function searchContactsByEmail(email: string): Promise<GhlContact[]
             // Filter for exact email match (case-insensitive)
             const exact = mapped.filter((c) => c.email.toLowerCase() === cleanEmail.toLowerCase());
             if (exact.length > 0) return exact;
-            if (mapped.length > 0) return mapped;
+            // FIX #15: Do NOT fall back to returning fuzzy/partial matches — a
+            // non-exact email match could silently link an order to the wrong contact,
+            // causing incorrect purchase records and tags on an unrelated person.
         } catch {
             // Continue trying fallback endpoint
         }
@@ -710,4 +712,25 @@ export async function findRecordByPurchaseReference(
         }
     }
     return null;
+}
+
+/**
+ * Fetch a single GHL contact by its ID.
+ * Returns null if the contact does not exist (404) — used for cached-mapping
+ * liveness checks so stale mappings pointing to deleted contacts are invalidated.
+ */
+export async function getGhlContactById(contactId: string): Promise<GhlContact | null> {
+    const cfg = getIntegrationConfig();
+    try {
+        const json = await ghlFetch(
+            `/contacts/${contactId}?locationId=${cfg.ghl.locationId}`,
+        );
+        const c = json?.contact ?? json;
+        if (!c?.id) return null;
+        return mapContact(c);
+    } catch (e: unknown) {
+        const err = e as { status?: number };
+        if (err.status === 404) return null; // contact was deleted
+        throw e; // re-throw anything else (auth, network)
+    }
 }

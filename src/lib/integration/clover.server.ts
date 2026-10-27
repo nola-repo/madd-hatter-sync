@@ -174,7 +174,7 @@ export async function fetchCloverOrder(orderId: string): Promise<CloverOrder> {
             centsFromValue(li.discounts?.elements?.[0]?.amount ?? li.discountAmount),
             currency,
         );
-        const lineTotal = computeLineTotal(unit, qty, modifiers, discountAmount.cents);
+        const lineTotal = computeLineTotal(unit, qty, modifiers, discountAmount.cents, currency);
         return {
             id: li.id,
             name: li.name ?? "Item",
@@ -224,11 +224,12 @@ function computeLineTotal(
     qty: number,
     modifiers: { amount: CloverMoney }[],
     discountCents: number,
+    currency: string, // FIX #6: was ignored — now used in the return value
 ): CloverMoney {
     const modSum = modifiers.reduce((s, m) => s + m.amount.cents, 0);
     const gross = unitCents * qty + modSum;
     const net = Math.max(0, gross - discountCents);
-    return { cents: net, currency: "USD" };
+    return { cents: net, currency }; // FIX #6: was hardcoded "USD"
 }
 
 function derivePaymentStatus(order: any, payments: any[]): CloverOrder["paymentStatus"] {

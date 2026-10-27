@@ -1,16 +1,18 @@
 //
 // Server-only sync orchestration: idempotent, concurrency-safe, step-by-step.
 //
-// SAFETY: This module uses the centralized CustomerMatchService and NEVER
-// creates GHL contacts for unmatched Clover customers. Only confidently
-// matched EXISTING GHL contacts receive purchase records + tags.
+// CONTACT CREATION POLICY:
+//   - Confirmed GHL contacts (matched by email/phone/mapping): purchase records + tags written.
+//   - NO_CUSTOMER (walk-in orders with no Clover customer): anonymous GHL contact auto-created.
+//   - Customers with identifiers (email/phone) but no GHL match: a new GHL contact is
+//     auto-created by customer-match.server.ts so no purchase data is ever lost.
+//   - CONFLICT / AMBIGUOUS matches: held for review — no GHL modification.
 import { fetchCloverOrder } from "./clover.server";
 import {
     associateRecordToContact,
     createGhlContact,
     createPurchaseRecord,
     findPurchaseObjectSchema,
-    findRecordByPurchaseReference,
     validatePurchaseSchema,
     type CustomObjectSchema,
     type SchemaValidation,
@@ -117,27 +119,35 @@ export async function syncOrderToGhl(
     try {
         const result = await runSync(order, orderRow.id, cached);
 
-        await finishSyncAttempt(attempt.id, {
-            status: result.outcome,
-            outcome_message: result.message,
-            ghl_contact_id: result.ghlContactId,
-            matched_by: result.matchedBy,
-            items_synced: result.itemsSynced,
-            items_held: result.itemsHeld,
-            error: result.error,
-            review_reason: result.reviewReason,
-        });
+        // Persist attempt result (best-effort — must not block the status/lock update below).
+        try {
+            await finishSyncAttempt(attempt.id, {
+                status: result.outcome,
+                outcome_message: result.message,
+                ghl_contact_id: result.ghlContactId,
+                matched_by: result.matchedBy,
+                items_synced: result.itemsSynced,
+                items_held: result.itemsHeld,
+                error: result.error,
+                review_reason: result.reviewReason,
+            });
+        } catch (attemptErr: any) {
+            console.warn(`[sync] finishSyncAttempt failed (non-fatal): ${attemptErr?.message ?? String(attemptErr)}`);
+        }
+
+        // updateOrder ALWAYS runs here to release the "in_progress" lock, even if
+        // finishSyncAttempt failed above.
         await updateOrder(orderRow.id, {
             status:
                 result.outcome === "synced"
                     ? "synced"
                     : result.outcome === "partial"
-                        ? "synced"
+                        ? "partial"           // FIX: was "synced", partial is now distinct
                         : result.outcome === "held_for_review"
                             ? "held_for_review"
                             : result.outcome === "error"
                                 ? "error"
-                                : "synced",
+                                : "pending",  // FIX: "skipped" was mapped to "synced" — now "pending" so it retries
             ghl_contact_id: result.ghlContactId,
             review_reason: result.reviewReason,
             last_attempt_id: attempt.id,
@@ -145,15 +155,19 @@ export async function syncOrderToGhl(
         return result;
     } catch (e: any) {
         const msg = e?.message ?? String(e);
-        await finishSyncAttempt(attempt.id, {
-            status: "error",
-            error: msg,
-        });
+
+        // Both operations below must run to ensure the lock ("in_progress") is always released.
+        try {
+            await finishSyncAttempt(attempt.id, { status: "error", error: msg });
+        } catch { /* best-effort — don't mask the original error */ }
+
+        // FIX: This ALWAYS runs, even if finishSyncAttempt threw above, releasing the lock.
         await updateOrder(orderRow.id, {
             status: "error",
             review_reason: msg,
             last_attempt_id: attempt.id,
         });
+
         return {
             outcome: "error",
             message: "Sync failed before completion. Progress was saved; you can retry safely.",
@@ -219,7 +233,8 @@ async function runSync(
     }
 
     // ---- CENTRALIZED IDENTITY RESOLUTION ----
-    // Uses the canonical CustomerMatchService. NEVER creates contacts.
+    // Uses the canonical CustomerMatchService. Auto-creates contacts for
+    // unmatched customers so no purchase data is ever lost.
     const match = await matchCloverCustomerToGhlContact({
         cloverCustomerId: order.customer?.id ?? null,
         customerName: order.customer
@@ -300,8 +315,7 @@ async function runSync(
                 };
             }
 
-            // Proceed with the anonymous contact — fall through to line-item sync.
-            // We re-assign the match variables so the rest of the function works.
+            // Proceed with the anonymous contact.
             const anonGhlContactId = anonymousContactId!;
             const anonMatchedBy = "auto_create" as const;
 
@@ -324,61 +338,73 @@ async function runSync(
             // Sync line items to the anonymous contact.
             const anonPurchaseRecordIds: string[] = [];
             let anonItemsSynced = 0;
+            let anonItemsHeld = 0;
+
+            // FIX #1: Fetch existing items ONCE before the loop (was N+1 per-item query).
+            const anonExistingItems = await getOrderItems(orderRowId);
+
             for (const li of order.lineItems) {
-                const ref = purchaseReference(order.merchantId, order.id, li.id);
-                let recordId: string | null = null;
-                const existingItems = await getOrderItems(orderRowId);
-                const existingLocal = existingItems.find((i) => i.purchase_reference === ref && i.ghl_record_id);
-                if (existingLocal) recordId = existingLocal.ghl_record_id;
-                if (!recordId) {
-                    const values: Record<string, string> = {
-                        "Purchase Reference": ref,
-                        "Item Name": li.name,
-                        Category: li.category ?? "",
-                        Quantity: String(li.quantity),
-                        "Unit Price": formatMoney(li.price.cents),
-                        "Line Total": formatMoney(li.discountAmount.cents ? li.price.cents * li.quantity - li.discountAmount.cents : li.price.cents * li.quantity),
-                        Currency: order.currency,
-                        "Purchase Date": new Date(order.createdTime).toISOString(),
-                        "Clover Order ID": order.id,
-                        "Clover Line Item ID": li.id,
-                        "Clover Item ID": li.cloverItemId ?? "",
-                        "Clover Merchant ID": order.merchantId,
-                        "Clover Customer ID": "",
-                        "Location Name": order.locationName ?? "",
-                        "Payment Status": order.paymentStatus,
-                    };
-                    recordId = await createPurchaseRecord(schema.id, schemaVal.fieldKeyMap, values);
+                // FIX #3: Per-item try/catch so one failure doesn't abort all remaining items.
+                try {
+                    const ref = purchaseReference(order.merchantId, order.id, li.id);
+                    let recordId: string | null = null;
+                    const existingLocal = anonExistingItems.find((i) => i.purchase_reference === ref && i.ghl_record_id);
+                    if (existingLocal) recordId = existingLocal.ghl_record_id;
+                    if (!recordId) {
+                        const values: Record<string, string> = {
+                            "Purchase Reference": ref,
+                            "Item Name": li.name,
+                            Category: li.category ?? "",
+                            Quantity: String(li.quantity),
+                            "Unit Price": formatMoney(li.price.cents),
+                            "Line Total": formatMoney(li.discountAmount.cents ? li.price.cents * li.quantity - li.discountAmount.cents : li.price.cents * li.quantity),
+                            Currency: order.currency,
+                            "Purchase Date": new Date(order.createdTime).toISOString(),
+                            "Clover Order ID": order.id,
+                            "Clover Line Item ID": li.id,
+                            "Clover Item ID": li.cloverItemId ?? "",
+                            "Clover Merchant ID": order.merchantId,
+                            "Clover Customer ID": "",
+                            "Location Name": order.locationName ?? "",
+                            "Payment Status": order.paymentStatus,
+                        };
+                        recordId = await createPurchaseRecord(schema.id, schemaVal.fieldKeyMap, values);
+                    }
+                    await associateRecordToContact(schema.id, recordId, anonGhlContactId);
+                    await upsertOrderItem({
+                        order_id: orderRowId,
+                        clover_line_item_id: li.id,
+                        clover_item_id: li.cloverItemId,
+                        purchase_reference: ref,
+                        ghl_record_id: recordId,
+                        item_name: li.name,
+                        category: li.category,
+                        quantity: li.quantity,
+                        unit_price_cents: li.price.cents,
+                        line_total_cents: li.discountAmount.cents ? Math.max(0, li.price.cents * li.quantity - li.discountAmount.cents) : li.price.cents * li.quantity,
+                        currency: order.currency,
+                        payment_status: order.paymentStatus,
+                        status: "synced",
+                        flag: "anonymous_walk_in",
+                    });
+                    anonPurchaseRecordIds.push(recordId);
+                    anonItemsSynced += 1;
+                } catch (itemErr: any) {
+                    // FIX #2/#3: Increment itemsHeld so the "partial" outcome is reachable.
+                    console.warn(`[sync] Anonymous item ${li.id} ("${li.name}") failed: ${itemErr?.message ?? String(itemErr)}`);
+                    anonItemsHeld += 1;
                 }
-                await associateRecordToContact(schema.id, recordId, anonGhlContactId);
-                await upsertOrderItem({
-                    order_id: orderRowId,
-                    clover_line_item_id: li.id,
-                    clover_item_id: li.cloverItemId,
-                    purchase_reference: ref,
-                    ghl_record_id: recordId,
-                    item_name: li.name,
-                    category: li.category,
-                    quantity: li.quantity,
-                    unit_price_cents: li.price.cents,
-                    line_total_cents: li.discountAmount.cents ? Math.max(0, li.price.cents * li.quantity - li.discountAmount.cents) : li.price.cents * li.quantity,
-                    currency: order.currency,
-                    payment_status: order.paymentStatus,
-                    status: "synced",
-                    flag: "anonymous_walk_in",
-                });
-                anonPurchaseRecordIds.push(recordId);
-                anonItemsSynced += 1;
             }
             await updateOrder(orderRowId, { ghl_contact_id: anonGhlContactId, processed_at: new Date().toISOString() });
             return {
-                outcome: "synced",
+                // FIX #2: "partial" is now reachable when anonItemsHeld > 0.
+                outcome: anonItemsHeld > 0 ? "partial" : "synced",
                 message: `Synced ${anonItemsSynced} purchase record(s) to anonymous GHL contact ${anonGhlContactId}.`,
                 ghlContactId: anonGhlContactId,
                 matchedBy: anonMatchedBy,
                 purchaseRecordIds: anonPurchaseRecordIds,
                 itemsSynced: anonItemsSynced,
-                itemsHeld: 0,
+                itemsHeld: anonItemsHeld,
                 reviewReason: null,
                 error: null,
             };
@@ -431,153 +457,179 @@ async function runSync(
     // Create one record per line item, idempotently.
     const purchaseRecordIds: string[] = [];
     let itemsSynced = 0;
-    let itemsHeld = 0;
-    // purchaseRefKey is declared above in the schema validation block.
+    let itemsHeld = 0; // FIX #2: now actually incremented below
+
+    // FIX #1: Fetch existing items ONCE before the loop (was N+1 per-item query).
+    const allExistingItems = await getOrderItems(orderRowId);
 
     for (const li of order.lineItems) {
-        const ref = purchaseReference(order.merchantId, order.id, li.id);
-
-        // check our local DB first for existing record ID (fast, 1 query)
-        let recordId: string | null = null;
-        const existingItems = await getOrderItems(orderRowId);
-        const existingLocal = existingItems.find((i) => i.purchase_reference === ref && i.ghl_record_id);
-        if (existingLocal) recordId = existingLocal.ghl_record_id;
-
-        // Do NOT perform expensive multi-page CRM scans per line-item inside cron.
-        // If not in local DB, create a new record directly with deterministic reference.
-
-        if (!recordId) {
-            const values: Record<string, string> = {
-                "Purchase Reference": ref,
-                "Item Name": li.name,
-                Category: li.category ?? "",
-                Quantity: String(li.quantity),
-                "Unit Price": formatMoney(li.price.cents),
-                "Line Total": formatMoney(
-                    li.discountAmount.cents
-                        ? li.price.cents * li.quantity - li.discountAmount.cents
-                        : li.price.cents * li.quantity,
-                ),
-                Currency: order.currency,
-                "Purchase Date": new Date(order.createdTime).toISOString(),
-                "Clover Order ID": order.id,
-                "Clover Line Item ID": li.id,
-                "Clover Item ID": li.cloverItemId ?? "",
-                "Clover Merchant ID": order.merchantId,
-                "Clover Customer ID": order.customer?.id ?? "",
-                "Location Name": order.locationName ?? "",
-                "Payment Status": order.paymentStatus,
-            };
-            recordId = await createPurchaseRecord(schema.id, schemaVal.fieldKeyMap, values);
-        }
-
-        // Associate with the contact (idempotent: re-associating is safe).
-        await associateRecordToContact(schema.id, recordId, ghlContactId);
-
-        await logSyncStep({
-            correlationId: `SYNC-${order.id}`,
-            operation: "GHL_OBJECT_CREATE",
-            status: "success",
-            cloverOrderId: order.id,
-            cloverCustomerId: order.customer?.id ?? null,
-            cloverItemId: li.cloverItemId ?? null,
-            purchaseReference: ref,
-            ghlContactId,
-            ghlObjectRecordId: recordId,
-            details: { itemName: li.name },
-        });
-
-        // ---- Apply + verify the purchase tag on the GHL contact ----
-        // This is the primary requirement: "Clover - Purchased: <Item>".
-        // Idempotent: skips if already tagged. Never removes other tags.
-        // A successful POST is NOT sufficient — we re-read and verify.
-        const tagResult = await applyPurchaseTag(ghlContactId, li.name);
-        let verificationStatus: "verified" | "failed" | "out_of_sync" = "failed";
-        if (tagResult.status === "applied" || tagResult.status === "already_tagged") {
-            const verify = await verifyPurchaseTag(ghlContactId, li.name);
-            verificationStatus = verify.status;
-        }
-
-        await logSyncStep({
-            correlationId: `SYNC-${order.id}`,
-            operation: "GHL_TAG_VERIFIED",
-            status: verificationStatus === "verified" ? "success" : "warning",
-            cloverOrderId: order.id,
-            cloverCustomerId: order.customer?.id ?? null,
-            ghlContactId,
-            ghlTagName: purchaseTagLabel(li.name),
-            details: { tagStatus: tagResult.status, verificationStatus },
-        });
-
-        // Record the tag result in purchase_tags (idempotent upsert by
-        // clover_customer_id + normalized_item_name).
-        const normalizedItem = normalizeItemName(li.name);
-        const tagLabel = purchaseTagLabel(li.name);
-        const sb = getSupabaseServer();
+        // FIX #3: Per-item try/catch so one GHL failure doesn't abort all remaining items.
         try {
-            const { data: existing } = await sb
-                .from("purchase_tags")
-                .select("id, attempt_count")
-                .eq("clover_customer_id", order.customer?.id ?? "")
-                .eq("normalized_item_name", normalizedItem)
-                .maybeSingle();
-            if (existing) {
-                await sb
+            const ref = purchaseReference(order.merchantId, order.id, li.id);
+
+            // Check our local DB first for existing record ID (fast, avoids GHL round-trip).
+            let recordId: string | null = null;
+            const existingLocal = allExistingItems.find((i) => i.purchase_reference === ref && i.ghl_record_id);
+            if (existingLocal) recordId = existingLocal.ghl_record_id;
+
+            if (!recordId) {
+                const values: Record<string, string> = {
+                    "Purchase Reference": ref,
+                    "Item Name": li.name,
+                    Category: li.category ?? "",
+                    Quantity: String(li.quantity),
+                    "Unit Price": formatMoney(li.price.cents),
+                    "Line Total": formatMoney(
+                        li.discountAmount.cents
+                            ? li.price.cents * li.quantity - li.discountAmount.cents
+                            : li.price.cents * li.quantity,
+                    ),
+                    Currency: order.currency,
+                    "Purchase Date": new Date(order.createdTime).toISOString(),
+                    "Clover Order ID": order.id,
+                    "Clover Line Item ID": li.id,
+                    "Clover Item ID": li.cloverItemId ?? "",
+                    "Clover Merchant ID": order.merchantId,
+                    "Clover Customer ID": order.customer?.id ?? "",
+                    "Location Name": order.locationName ?? "",
+                    "Payment Status": order.paymentStatus,
+                };
+                recordId = await createPurchaseRecord(schema.id, schemaVal.fieldKeyMap, values);
+            }
+
+            // Associate with the contact (idempotent: re-associating is safe).
+            await associateRecordToContact(schema.id, recordId, ghlContactId);
+
+            await logSyncStep({
+                correlationId: `SYNC-${order.id}`,
+                operation: "GHL_OBJECT_CREATE",
+                status: "success",
+                cloverOrderId: order.id,
+                cloverCustomerId: order.customer?.id ?? null,
+                cloverItemId: li.cloverItemId ?? null,
+                purchaseReference: ref,
+                ghlContactId,
+                ghlObjectRecordId: recordId,
+                details: { itemName: li.name },
+            });
+
+            // ---- Apply + verify the purchase tag on the GHL contact ----
+            // Idempotent: skips if already tagged. Never removes other tags.
+            // A successful POST is NOT sufficient — we re-read and verify.
+            const tagResult = await applyPurchaseTag(ghlContactId, li.name);
+            let verificationStatus: "verified" | "failed" | "out_of_sync" = "failed";
+            if (tagResult.status === "applied" || tagResult.status === "already_tagged") {
+                const verify = await verifyPurchaseTag(ghlContactId, li.name);
+                verificationStatus = verify.status;
+            }
+
+            await logSyncStep({
+                correlationId: `SYNC-${order.id}`,
+                operation: "GHL_TAG_VERIFIED",
+                status: verificationStatus === "verified" ? "success" : "warning",
+                cloverOrderId: order.id,
+                cloverCustomerId: order.customer?.id ?? null,
+                ghlContactId,
+                ghlTagName: purchaseTagLabel(li.name),
+                details: { tagStatus: tagResult.status, verificationStatus },
+            });
+
+            // Record the tag result in purchase_tags (idempotent upsert by
+            // clover_customer_id + normalized_item_name).
+            const normalizedItem = normalizeItemName(li.name);
+            const tagLabel = purchaseTagLabel(li.name);
+            const sb = getSupabaseServer();
+            try {
+                const { data: existing } = await sb
                     .from("purchase_tags")
-                    .update({
+                    .select("id, attempt_count")
+                    .eq("clover_customer_id", order.customer?.id ?? "")
+                    .eq("normalized_item_name", normalizedItem)
+                    .maybeSingle();
+                if (existing) {
+                    await sb
+                        .from("purchase_tags")
+                        .update({
+                            ghl_contact_id: ghlContactId,
+                            tag_label: tagLabel,
+                            clover_item_id: li.cloverItemId,
+                            status: tagResult.status === "error" ? "error" : "applied",
+                            verification_status: verificationStatus,
+                            verified_at: verificationStatus === "verified" ? new Date().toISOString() : null,
+                            attempt_count: (existing.attempt_count ?? 0) + 1,
+                            last_attempt_at: new Date().toISOString(),
+                            error: tagResult.error,
+                            updated_at: new Date().toISOString(),
+                        })
+                        .eq("id", existing.id);
+                } else {
+                    await sb.from("purchase_tags").insert({
+                        clover_merchant_id: order.merchantId,
+                        clover_customer_id: order.customer?.id ?? "",
                         ghl_contact_id: ghlContactId,
+                        normalized_item_name: normalizedItem,
                         tag_label: tagLabel,
                         clover_item_id: li.cloverItemId,
                         status: tagResult.status === "error" ? "error" : "applied",
                         verification_status: verificationStatus,
                         verified_at: verificationStatus === "verified" ? new Date().toISOString() : null,
-                        attempt_count: (existing.attempt_count ?? 0) + 1,
+                        attempt_count: 1,
                         last_attempt_at: new Date().toISOString(),
                         error: tagResult.error,
-                        updated_at: new Date().toISOString(),
-                    })
-                    .eq("id", existing.id);
-            } else {
-                await sb.from("purchase_tags").insert({
-                    clover_merchant_id: order.merchantId,
-                    clover_customer_id: order.customer?.id ?? "",
-                    ghl_contact_id: ghlContactId,
-                    normalized_item_name: normalizedItem,
-                    tag_label: tagLabel,
-                    clover_item_id: li.cloverItemId,
-                    status: tagResult.status === "error" ? "error" : "applied",
-                    verification_status: verificationStatus,
-                    verified_at: verificationStatus === "verified" ? new Date().toISOString() : null,
-                    attempt_count: 1,
-                    last_attempt_at: new Date().toISOString(),
-                    error: tagResult.error,
-                });
+                    });
+                }
+            } catch (tagDbErr: any) {
+                // FIX #24: Tag tracking is best-effort but failures are now logged.
+                console.warn(`[sync] purchase_tags upsert failed for item "${li.name}": ${tagDbErr?.message ?? String(tagDbErr)}`);
             }
-        } catch {
-            // Tag tracking is best-effort; the GHL tag itself is the source of truth.
-        }
 
-        // Save progress after each successful step.
-        await upsertOrderItem({
-            order_id: orderRowId,
-            clover_line_item_id: li.id,
-            clover_item_id: li.cloverItemId,
-            purchase_reference: ref,
-            ghl_record_id: recordId,
-            item_name: li.name,
-            category: li.category,
-            quantity: li.quantity,
-            unit_price_cents: li.price.cents,
-            line_total_cents: li.discountAmount.cents
-                ? Math.max(0, li.price.cents * li.quantity - li.discountAmount.cents)
-                : li.price.cents * li.quantity,
-            currency: order.currency,
-            payment_status: order.paymentStatus,
-            status: "synced",
-            flag: null,
-        });
-        purchaseRecordIds.push(recordId);
-        itemsSynced += 1;
+            // Save progress after each successful step.
+            await upsertOrderItem({
+                order_id: orderRowId,
+                clover_line_item_id: li.id,
+                clover_item_id: li.cloverItemId,
+                purchase_reference: ref,
+                ghl_record_id: recordId,
+                item_name: li.name,
+                category: li.category,
+                quantity: li.quantity,
+                unit_price_cents: li.price.cents,
+                line_total_cents: li.discountAmount.cents
+                    ? Math.max(0, li.price.cents * li.quantity - li.discountAmount.cents)
+                    : li.price.cents * li.quantity,
+                currency: order.currency,
+                payment_status: order.paymentStatus,
+                status: "synced",
+                flag: null,
+            });
+            purchaseRecordIds.push(recordId);
+            itemsSynced += 1;
+
+        } catch (itemErr: any) {
+            // FIX #2/#3: Increment itemsHeld and save the item as held for retry.
+            console.warn(`[sync] Line item ${li.id} ("${li.name}") failed: ${itemErr?.message ?? String(itemErr)}`);
+            const ref = purchaseReference(order.merchantId, order.id, li.id);
+            // Best-effort: persist held status so the item is visible in the UI.
+            await upsertOrderItem({
+                order_id: orderRowId,
+                clover_line_item_id: li.id,
+                clover_item_id: li.cloverItemId,
+                purchase_reference: ref,
+                ghl_record_id: null,
+                item_name: li.name,
+                category: li.category,
+                quantity: li.quantity,
+                unit_price_cents: li.price.cents,
+                line_total_cents: li.discountAmount.cents
+                    ? Math.max(0, li.price.cents * li.quantity - li.discountAmount.cents)
+                    : li.price.cents * li.quantity,
+                currency: order.currency,
+                payment_status: order.paymentStatus,
+                status: "held",
+                flag: (itemErr?.message ?? String(itemErr)).slice(0, 200),
+            }).catch(() => { /* don't mask the original error */ });
+            itemsHeld += 1;
+        }
     }
 
     // Mark the order as processed by the purchase-mapping pipeline.
@@ -586,6 +638,7 @@ async function runSync(
     });
 
     return {
+        // FIX #2: "partial" is now reachable when itemsHeld > 0.
         outcome: itemsHeld > 0 ? "partial" : "synced",
         message: `Synced ${itemsSynced} purchase record(s) to GHL contact ${ghlContactId}.`,
         ghlContactId,

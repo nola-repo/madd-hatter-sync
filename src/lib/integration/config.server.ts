@@ -9,6 +9,8 @@ export type IntegrationConfig = {
         merchantId: string;
         apiKey: string;
         environment: "sandbox" | "production";
+        /** Optional HMAC secret for verifying Clover webhook signatures. */
+        webhookSecret: string | null;
     };
     ghl: {
         apiBase: string;
@@ -68,14 +70,13 @@ export function getIntegrationConfig(): IntegrationConfig {
 
     return {
         clover: {
-            // Production REST API host: https://api.clover.com
-            // Sandbox REST API host:   https://apisandbox.dev.clover.com
-            // (https://sandbox.dev.clover.com is the legacy Developer DASHBOARD, NOT the API host.)
             apiBase:
                 cloverEnv === "sandbox" ? "https://apisandbox.dev.clover.com" : "https://api.clover.com",
             merchantId: cloverMerchantId,
             apiKey: cloverApiKey,
             environment: cloverEnv,
+            // Optional — if absent, webhook signature verification is skipped (logs a warning).
+            webhookSecret: (process.env.CLOVER_WEBHOOK_SECRET ?? "").trim() || null,
         },
         ghl: {
             // GHL REST API base (Lead Connector API v1).
