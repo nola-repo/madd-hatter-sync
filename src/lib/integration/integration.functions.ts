@@ -781,3 +781,52 @@ export const getAudiencePresets = createServerFn({ method: "GET" }).handler(asyn
     })),
   };
 });
+
+// Returns all unique item names and category names from real order data.
+// Used to populate the Category Buyer and Item Buyer filter dropdowns
+// so users see their actual menu (Wings, Tacos, Drinks, etc.) instead of
+// a blank text box.
+export const getAudienceFilterOptions = createServerFn({ method: "GET" }).handler(async () => {
+  await requireAdmin();
+  try {
+    const sb = getSupabaseServer();
+
+    // Fetch all order_items in one pass — gives us both items AND categories
+    const { data: items, error } = await sb
+      .from("order_items")
+      .select("item_name, category")
+      .not("item_name", "is", null)
+      .limit(500_000);
+
+    if (error) throw new Error(`DB order_items: ${error.message}`);
+
+    // Collect unique item names with their sale counts (for sorting by popularity)
+    const itemCounts = new Map<string, number>();
+    const categoryCounts = new Map<string, number>();
+
+    for (const row of items ?? []) {
+      const name = (row.item_name ?? "").trim();
+      const cat = (row.category ?? "").trim();
+      if (name) itemCounts.set(name, (itemCounts.get(name) ?? 0) + 1);
+      if (cat) categoryCounts.set(cat, (categoryCounts.get(cat) ?? 0) + 1);
+    }
+
+    // Sort by popularity descending so the most-ordered items appear first
+    const sortedItems = [...itemCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({ name, count }));
+
+    const sortedCategories = [...categoryCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({ name, count }));
+
+    return {
+      setupRequired: false as const,
+      items: sortedItems,
+      categories: sortedCategories,
+    };
+  } catch (e) {
+    if (isSetupRequired(e)) return setupRequiredResponse(e);
+    throw e;
+  }
+});

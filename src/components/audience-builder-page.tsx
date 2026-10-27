@@ -1,8 +1,6 @@
-import { useState, useCallback, useId } from "react";
+import { useState, useCallback, useId, useEffect, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import {
-  buildAudienceFn,
-} from "@/lib/integration/integration.functions";
+import { buildAudienceFn, getAudienceFilterOptions } from "@/lib/integration/integration.functions";
 import { AUDIENCE_PRESETS } from "@/lib/integration/audience-presets";
 import type {
   AudienceQuery,
@@ -33,17 +31,25 @@ import {
   CheckCircle2,
   AlertCircle,
   Search,
-  ChevronRight,
   Layers,
   Target,
   Clock,
   TrendingUp,
   CreditCard,
   BarChart3,
+  ChevronDown,
 } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
-import { money, formatDateTime } from "@/lib/integration/format";
+import { money } from "@/lib/integration/format";
 import { cn } from "@/lib/utils";
+
+// ---- Types for filter options loaded from DB ----------------------------
+
+type FilterOption = { name: string; count: number };
+type FilterOptionsData = {
+  items: FilterOption[];
+  categories: FilterOption[];
+};
 
 // ---- Filter type metadata -----------------------------------------------
 
@@ -53,7 +59,7 @@ const FILTER_DEFS: Array<{
   description: string;
   icon: React.ComponentType<{ className?: string }>;
   color: string;
-  fields: Array<"thresholdDollars" | "visitCount" | "days" | "name">;
+  fields: Array<"thresholdDollars" | "visitCount" | "days" | "name" | "category">;
   defaultValues: Partial<FilterCondition>;
 }> = [
   {
@@ -95,7 +101,7 @@ const FILTER_DEFS: Array<{
   {
     type: "category_buyer",
     label: "Category Buyer",
-    description: "Purchased from category",
+    description: "Purchased from a menu category",
     icon: Layers,
     color: "text-rose-400",
     fields: ["name"],
@@ -104,7 +110,7 @@ const FILTER_DEFS: Array<{
   {
     type: "item_buyer",
     label: "Item Buyer",
-    description: "Purchased specific item",
+    description: "Purchased a specific menu item",
     icon: Target,
     color: "text-cyan-400",
     fields: ["name"],
@@ -150,16 +156,134 @@ function makeConditionDescription(cond: FilterCondition): string {
   }
 }
 
+// ---- Searchable Picker --------------------------------------------------
+// Replaces the free-text box for category_buyer / item_buyer with a
+// dropdown populated from real DB data, with a search box inside it.
+
+function NamePicker({
+  value,
+  options,
+  placeholder,
+  onChange,
+  emptyLabel,
+}: {
+  value: string;
+  options: FilterOption[];
+  placeholder: string;
+  onChange: (name: string) => void;
+  emptyLabel: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setSearch("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const filtered = options.filter((o) => o.name.toLowerCase().includes(search.toLowerCase()));
+  const hasValue = value.trim().length > 0;
+
+  return (
+    <div className="relative flex-1 min-w-40" ref={ref}>
+      {/* Trigger */}
+      <button
+        type="button"
+        onClick={() => { setOpen((p) => !p); setSearch(""); }}
+        className={cn(
+          "flex w-full items-center justify-between gap-2 rounded-md border px-2.5 py-1.5 text-xs transition-colors",
+          hasValue
+            ? "border-zinc-600 bg-[#1A1A1E] text-white"
+            : "border-[#27272A] bg-[#1A1A1E] text-zinc-500",
+        )}
+      >
+        <span className="truncate">{hasValue ? value : placeholder}</span>
+        <ChevronDown className={cn("h-3 w-3 shrink-0 text-zinc-500 transition-transform", open && "rotate-180")} />
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div className="absolute z-50 mt-1 w-full min-w-[220px] rounded-xl border border-[#27272A] bg-[#111113] shadow-xl overflow-hidden">
+          {/* Search inside dropdown */}
+          <div className="flex items-center gap-2 border-b border-[#1E1E22] px-2.5 py-2">
+            <Search className="h-3 w-3 text-zinc-600 shrink-0" />
+            <input
+              autoFocus
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={`Search ${emptyLabel}…`}
+              className="flex-1 bg-transparent text-xs text-white placeholder:text-zinc-600 focus:outline-none"
+            />
+            {search && (
+              <button onClick={() => setSearch("")} className="text-zinc-600 hover:text-zinc-300">
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+
+          {/* Option list */}
+          <div className="max-h-52 overflow-y-auto">
+            {/* Allow typing a custom value not in the list */}
+            {search.trim() && !filtered.some((o) => o.name.toLowerCase() === search.toLowerCase()) && (
+              <button
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-300 hover:bg-zinc-800 transition-colors border-b border-[#1E1E22]"
+                onClick={() => { onChange(search.trim()); setOpen(false); setSearch(""); }}
+              >
+                <Plus className="h-3 w-3 text-zinc-500" />
+                Use "<span className="font-semibold text-white">{search.trim()}</span>"
+              </button>
+            )}
+
+            {filtered.length === 0 && !search.trim() && (
+              <div className="py-6 text-center text-xs text-zinc-600">
+                {options.length === 0 ? "Loading…" : "No results"}
+              </div>
+            )}
+
+            {filtered.map((opt) => (
+              <button
+                key={opt.name}
+                className={cn(
+                  "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs transition-colors hover:bg-zinc-800",
+                  value === opt.name ? "bg-zinc-800/60 text-white" : "text-zinc-300",
+                )}
+                onClick={() => { onChange(opt.name); setOpen(false); setSearch(""); }}
+              >
+                <span className="truncate">{opt.name}</span>
+                <span className="shrink-0 text-[10px] font-mono text-zinc-600">×{opt.count.toLocaleString()}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---- Condition Editor ---------------------------------------------------
 
 function ConditionEditor({
   condition,
   onChange,
   onRemove,
+  canRemove,
+  filterOptions,
 }: {
   condition: FilterCondition;
   onChange: (updated: FilterCondition) => void;
   onRemove: () => void;
+  canRemove: boolean;
+  filterOptions: FilterOptionsData;
 }) {
   const def = FILTER_DEFS.find((d) => d.type === condition.type)!;
   const Icon = def?.icon ?? Filter;
@@ -188,11 +312,12 @@ function ConditionEditor({
           value={condition.type}
           onValueChange={(v) => {
             const newDef = FILTER_DEFS.find((d) => d.type === v)!;
+            const base = { ...condition, type: v as FilterType, ...newDef.defaultValues };
             update({
               type: v as FilterType,
               ...newDef.defaultValues,
-              label: makeConditionLabel({ ...condition, type: v as FilterType, ...newDef.defaultValues }),
-              description: makeConditionDescription({ ...condition, type: v as FilterType, ...newDef.defaultValues }),
+              label: makeConditionLabel(base),
+              description: makeConditionDescription(base),
             });
           }}
         >
@@ -210,6 +335,7 @@ function ConditionEditor({
 
         {/* Value inputs */}
         <div className="flex flex-wrap gap-2">
+          {/* Dollar threshold input */}
           {def?.fields.includes("thresholdDollars") && (
             <div className="flex items-center gap-1.5">
               <span className="text-[10px] text-zinc-500 font-mono">$</span>
@@ -224,6 +350,8 @@ function ConditionEditor({
               <span className="text-[10px] text-zinc-500">or more</span>
             </div>
           )}
+
+          {/* Visit count input */}
           {def?.fields.includes("visitCount") && (
             <div className="flex items-center gap-1.5">
               <input
@@ -237,6 +365,8 @@ function ConditionEditor({
               <span className="text-[10px] text-zinc-500">visits</span>
             </div>
           )}
+
+          {/* Days input */}
           {def?.fields.includes("days") && (
             <div className="flex items-center gap-1.5">
               <input
@@ -250,13 +380,26 @@ function ConditionEditor({
               <span className="text-[10px] text-zinc-500">days</span>
             </div>
           )}
-          {def?.fields.includes("name") && (
-            <input
-              type="text"
-              placeholder={condition.type === "category_buyer" ? "e.g. Drinks" : "e.g. Wings"}
+
+          {/* Category picker — real data from DB */}
+          {condition.type === "category_buyer" && (
+            <NamePicker
               value={condition.name ?? ""}
-              onChange={(e) => update({ name: e.target.value })}
-              className="h-7 flex-1 min-w-32 rounded-md border border-[#27272A] bg-[#1A1A1E] px-2 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600"
+              options={filterOptions.categories}
+              placeholder="Pick a category…"
+              emptyLabel="categories"
+              onChange={(name) => update({ name })}
+            />
+          )}
+
+          {/* Item picker — real data from DB */}
+          {condition.type === "item_buyer" && (
+            <NamePicker
+              value={condition.name ?? ""}
+              options={filterOptions.items}
+              placeholder="Pick a menu item…"
+              emptyLabel="items"
+              onChange={(name) => update({ name })}
             />
           )}
         </div>
@@ -267,8 +410,14 @@ function ConditionEditor({
 
       <button
         onClick={onRemove}
-        className="mt-0.5 h-6 w-6 shrink-0 flex items-center justify-center rounded-md text-zinc-600 hover:text-red-400 hover:bg-red-950/30 transition-colors"
-        title="Remove condition"
+        disabled={!canRemove}
+        className={cn(
+          "mt-0.5 h-6 w-6 shrink-0 flex items-center justify-center rounded-md transition-colors",
+          canRemove
+            ? "text-zinc-600 hover:text-red-400 hover:bg-red-950/30 cursor-pointer"
+            : "text-zinc-800 cursor-not-allowed",
+        )}
+        title={canRemove ? "Remove condition" : "Cannot remove the only condition in a group"}
       >
         <X className="h-3.5 w-3.5" />
       </button>
@@ -284,12 +433,14 @@ function GroupEditor({
   isOnly,
   onChange,
   onRemove,
+  filterOptions,
 }: {
   group: ConditionGroup;
   groupIndex: number;
   isOnly: boolean;
   onChange: (updated: ConditionGroup) => void;
   onRemove: () => void;
+  filterOptions: FilterOptionsData;
 }) {
   const uid = useId();
 
@@ -314,7 +465,6 @@ function GroupEditor({
   };
 
   const removeCondition = (idx: number) => {
-    // Prevent removing the last condition — empty groups fail silently
     if (group.conditions.length <= 1) return;
     onChange({ ...group, conditions: group.conditions.filter((_, i) => i !== idx) });
   };
@@ -357,6 +507,8 @@ function GroupEditor({
               condition={cond}
               onChange={(u) => updateCondition(idx, u)}
               onRemove={() => removeCondition(idx)}
+              canRemove={group.conditions.length > 1}
+              filterOptions={filterOptions}
             />
           </div>
         ))}
@@ -407,7 +559,23 @@ function exportCSV(customers: AudienceCustomerRow[], label: string) {
 
 export function AudienceBuilderPage() {
   const buildFn = useServerFn(buildAudienceFn);
+  const getFilterOptionsFn = useServerFn(getAudienceFilterOptions);
   const uid = useId();
+
+  // ---- Filter options from DB (items + categories)
+  const [filterOptions, setFilterOptions] = useState<FilterOptionsData>({ items: [], categories: [] });
+  const [optionsLoading, setOptionsLoading] = useState(true);
+
+  useEffect(() => {
+    getFilterOptionsFn({})
+      .then((res) => {
+        if (!res.setupRequired) {
+          setFilterOptions({ items: res.items, categories: res.categories });
+        }
+      })
+      .catch(() => {/* silently ignore - fallback to free text */})
+      .finally(() => setOptionsLoading(false));
+  }, []);
 
   // ---- Query state
   const [matchAllGroups, setMatchAllGroups] = useState(true);
@@ -438,7 +606,6 @@ export function AudienceBuilderPage() {
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Audience name for CSV export
   const audienceLabel = groups
     .flatMap((g) => g.conditions)
     .map((c) => c.label)
@@ -532,11 +699,20 @@ export function AudienceBuilderPage() {
       {/* ---- Header ---- */}
       <PageHeader
         title="Audience Builder"
-        description="Combine purchase, visit, spending, event & birthday criteria into deduplicated outreach lists."
+        description="Combine purchase, visit, spending, and menu-item criteria into deduplicated outreach lists."
         actions={
-          <Badge variant="outline" className="border-zinc-700 text-zinc-300 text-xs font-mono">
-            {AUDIENCE_PRESETS.length} audiences available
-          </Badge>
+          <div className="flex items-center gap-2">
+            {optionsLoading ? (
+              <Badge variant="outline" className="border-zinc-700 text-zinc-500 text-xs gap-1.5">
+                <RefreshCw className="h-2.5 w-2.5 animate-spin" />
+                Loading menu…
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="border-zinc-700 text-zinc-300 text-xs font-mono">
+                {filterOptions.items.length} items · {filterOptions.categories.length} categories
+              </Badge>
+            )}
+          </div>
         }
       />
 
@@ -616,7 +792,7 @@ export function AudienceBuilderPage() {
                   MATCH ANY
                 </button>
                 <span className="text-[10px] text-zinc-600">
-                  {matchAllGroups ? "Every condition required" : "OR groups"}
+                  {matchAllGroups ? "Every group required" : "Any group matches"}
                 </span>
               </div>
 
@@ -646,6 +822,7 @@ export function AudienceBuilderPage() {
                       isOnly={groups.length === 1}
                       onChange={(u) => updateGroup(gi, u)}
                       onRemove={() => removeGroup(gi)}
+                      filterOptions={filterOptions}
                     />
                   </div>
                 ))}
@@ -704,6 +881,16 @@ export function AudienceBuilderPage() {
                 <p className="mt-1 text-xs text-zinc-600 max-w-xs mx-auto">
                   Configure your filters on the left, then click <strong className="text-zinc-400">Build Audience</strong> to generate your customer list.
                 </p>
+                {!optionsLoading && filterOptions.items.length > 0 && (
+                  <div className="mt-4 flex flex-wrap justify-center gap-1.5 max-w-sm mx-auto">
+                    <span className="text-[10px] text-zinc-600 w-full mb-1">Popular items in your data:</span>
+                    {filterOptions.items.slice(0, 8).map((item) => (
+                      <span key={item.name} className="rounded-full border border-[#222226] bg-[#141417] px-2 py-0.5 text-[10px] text-zinc-500">
+                        {item.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
