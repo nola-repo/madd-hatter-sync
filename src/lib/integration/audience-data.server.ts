@@ -103,11 +103,27 @@ export async function loadAggregates(): Promise<{
   byCustomer: Map<string, CustomerAgg>;
   allCustomers: CustomerAgg[];
 }> {
-  const sb = getSupabaseServer();
-  const cfg = getIntegrationConfig();
-  const mid = cfg.clover.merchantId;
+  let sb: ReturnType<typeof getSupabaseServer> | null = null;
+  let mid = "";
+  try {
+    sb = getSupabaseServer();
+    mid = getIntegrationConfig().clover.merchantId;
+    if (!mid) {
+      console.warn("Audience: no merchant ID configured");
+      return { byCustomer: new Map(), allCustomers: [] };
+    }
+  } catch (e) {
+    console.warn("Audience: config/supabase init failed:", (e as Error)?.message);
+    return { byCustomer: new Map(), allCustomers: [] };
+  }
 
-  const [orders, items] = await Promise.all([fetchAllOrders(mid), fetchAllItems(mid)]);
+  let orders: OrderRow[] = [];
+  let items: ItemRow[] = [];
+  try {
+    [orders, items] = await Promise.all([fetchAllOrders(mid), fetchAllItems(mid)]);
+  } catch (e) {
+    console.warn("Audience: order/item fetch failed:", (e as Error)?.message);
+  }
 
   // Paginate customers to avoid PostgREST's 1000-row default cap (DEF-011).
   const custRows: Array<{
@@ -119,7 +135,7 @@ export async function loadAggregates(): Promise<{
     marketing_allowed: boolean | null;
     created_at: string;
   }> = [];
-  {
+  try {
     let off = 0;
     for (;;) {
       const { data, error } = await sb
@@ -135,6 +151,8 @@ export async function loadAggregates(): Promise<{
       if (!data || data.length < PAGE) break;
       off += PAGE;
     }
+  } catch (e) {
+    console.warn("Audience: customers fetch failed:", (e as Error)?.message);
   }
 
   // Paginate customer_mappings — same reason (DEF-011).
@@ -143,7 +161,7 @@ export async function loadAggregates(): Promise<{
     ghl_contact_id: string | null;
     matched_by?: string | null;
   }> | null = null;
-  {
+  try {
     const allMap: Array<{
       clover_customer_id: string;
       ghl_contact_id: string | null;
@@ -167,6 +185,8 @@ export async function loadAggregates(): Promise<{
       off += PAGE;
     }
     if (ok) mapRows = allMap;
+  } catch (e) {
+    console.warn("Audience: customer_mappings fetch failed:", (e as Error)?.message);
   }
 
   const custMap = new Map((custRows ?? []).map((c) => [c.clover_customer_id, c]));

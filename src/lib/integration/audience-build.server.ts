@@ -57,7 +57,25 @@ export async function buildAudience(
   andAudiences: AudienceId[],
   orGroups: AudienceId[][] = [],
 ): Promise<AudienceResult> {
-  const { allCustomers } = await loadAggregates();
+  let allCustomers: CustomerAgg[] = [];
+  try {
+    ({ allCustomers } = await loadAggregates());
+  } catch (e) {
+    console.error("Audience: loadAggregates failed:", (e as Error)?.message);
+    // Return an empty result with a warning instead of throwing across the RPC boundary.
+    return {
+      totalCustomers: 0,
+      marketingEligible: 0,
+      withPhone: 0,
+      withEmail: 0,
+      crmLinked: 0,
+      customers: [],
+      audienceSizes: {},
+      warnings: [
+        "Could not load customer data. Check that integration secrets are configured in Settings.",
+      ],
+    };
+  }
   const warnings: string[] = [];
 
   const sets = new Map<AudienceId, Set<string>>();

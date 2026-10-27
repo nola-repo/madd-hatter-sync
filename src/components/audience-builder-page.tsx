@@ -72,12 +72,12 @@ export function AudienceBuilderPage() {
     try {
       const cleanOr = orGroups.filter((g) => g.length > 0);
       const res: any = await runFn({ data: { andAudiences, orGroups: cleanOr } });
+      // Detect raw HTML / 500 responses that crossed the RPC boundary.
       const rawText = typeof res === "string" ? res : "";
       if (
         rawText.includes("<!DOCTYPE") ||
         rawText.includes("<html") ||
-        rawText.includes("Internal server error") ||
-        rawText.includes("500")
+        rawText.includes("Internal server error")
       ) {
         setError(
           "Server evaluation error. Please check that your secrets are configured in Settings.",
