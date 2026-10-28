@@ -126,17 +126,19 @@ export async function syncOrderToGhl(
       error: result.error,
       review_reason: result.reviewReason,
     });
+    // FIX #8: Save the accurate status in DB. Previously "partial" and "skipped"
+    // were both overwritten with "synced", masking incomplete or skipped work.
     await updateOrder(orderRow.id, {
       status:
         result.outcome === "synced"
           ? "synced"
           : result.outcome === "partial"
-            ? "synced"
+            ? "partial"
             : result.outcome === "held_for_review"
               ? "held_for_review"
               : result.outcome === "error"
                 ? "error"
-                : "synced",
+                : "pending",
       ghl_contact_id: result.ghlContactId,
       review_reason: result.reviewReason,
       last_attempt_id: attempt.id,
@@ -449,154 +451,180 @@ async function runSync(
   const purchaseRecordIds: string[] = [];
   let itemsSynced = 0;
   let itemsHeld = 0;
-  // purchaseRefKey is declared above in the schema validation block.
+
+  // FIX #1: Fetch existing order items ONCE before the loop instead of querying
+  // inside the loop for every single line item (eliminates N+1 query).
+  const existingItems = await getOrderItems(orderRowId);
 
   for (const li of order.lineItems) {
-    const ref = purchaseReference(order.merchantId, order.id, li.id);
-
-    // Reconcile: check our local DB first for existing record ID (fast, 1 query)
-    let recordId: string | null = null;
-    const existingItems = await getOrderItems(orderRowId);
-    const existingLocal = existingItems.find(
-      (i) => i.purchase_reference === ref && i.ghl_record_id,
-    );
-    if (existingLocal) recordId = existingLocal.ghl_record_id;
-
-    // Do NOT perform expensive multi-page GHL scans per line-item inside cron.
-    // If not in local DB, create a new record directly with deterministic reference.
-
-    if (!recordId) {
-      const values: Record<string, string> = {
-        "Purchase Reference": ref,
-        "Item Name": li.name,
-        Category: li.category ?? "",
-        Quantity: String(li.quantity),
-        "Unit Price": formatMoney(li.price.cents),
-        "Line Total": formatMoney(
-          li.discountAmount.cents
-            ? li.price.cents * li.quantity - li.discountAmount.cents
-            : li.price.cents * li.quantity,
-        ),
-        Currency: order.currency,
-        "Purchase Date": new Date(order.createdTime).toISOString(),
-        "Clover Order ID": order.id,
-        "Clover Line Item ID": li.id,
-        "Clover Item ID": li.cloverItemId ?? "",
-        "Clover Merchant ID": order.merchantId,
-        "Clover Customer ID": order.customer?.id ?? "",
-        "Location Name": order.locationName ?? "",
-        "Payment Status": order.paymentStatus,
-      };
-      recordId = await createPurchaseRecord(schema.id, schemaVal.fieldKeyMap, values);
-    }
-
-    // Associate with the contact (idempotent: re-associating is safe).
-    await associateRecordToContact(schema.id, recordId, ghlContactId);
-
-    await logSyncStep({
-      correlationId: `SYNC-${order.id}`,
-      operation: "GHL_OBJECT_CREATE",
-      status: "success",
-      cloverOrderId: order.id,
-      cloverCustomerId: order.customer?.id ?? null,
-      cloverItemId: li.cloverItemId ?? null,
-      purchaseReference: ref,
-      ghlContactId,
-      ghlObjectRecordId: recordId,
-      details: { itemName: li.name },
-    });
-
-    // ---- Apply + verify the purchase tag on the GHL contact ----
-    // This is the primary requirement: "Clover - Purchased: <Item>".
-    // Idempotent: skips if already tagged. Never removes other tags.
-    // A successful POST is NOT sufficient — we re-read and verify.
-    const tagResult = await applyPurchaseTag(ghlContactId, li.name);
-    let verificationStatus: "verified" | "failed" | "out_of_sync" = "failed";
-    if (tagResult.status === "applied" || tagResult.status === "already_tagged") {
-      const verify = await verifyPurchaseTag(ghlContactId, li.name);
-      verificationStatus = verify.status;
-    }
-
-    await logSyncStep({
-      correlationId: `SYNC-${order.id}`,
-      operation: "GHL_TAG_VERIFIED",
-      status: verificationStatus === "verified" ? "success" : "warning",
-      cloverOrderId: order.id,
-      cloverCustomerId: order.customer?.id ?? null,
-      ghlContactId,
-      ghlTagName: purchaseTagLabel(li.name),
-      details: { tagStatus: tagResult.status, verificationStatus },
-    });
-
-    // Record the tag result in purchase_tags (idempotent upsert by
-    // clover_customer_id + normalized_item_name).
-    const normalizedItem = normalizeItemName(li.name);
-    const tagLabel = purchaseTagLabel(li.name);
-    const sb = getSupabaseServer();
     try {
-      const { data: existing } = await sb
-        .from("purchase_tags")
-        .select("id, attempt_count")
-        .eq("clover_customer_id", order.customer?.id ?? "")
-        .eq("normalized_item_name", normalizedItem)
-        .maybeSingle();
-      if (existing) {
-        await sb
+      const ref = purchaseReference(order.merchantId, order.id, li.id);
+
+      // Reconcile: check our local DB first for existing record ID (fast, in-memory)
+      let recordId: string | null = null;
+      const existingLocal = existingItems.find(
+        (i) => i.purchase_reference === ref && i.ghl_record_id,
+      );
+      if (existingLocal) recordId = existingLocal.ghl_record_id;
+
+      if (!recordId) {
+        const values: Record<string, string> = {
+          "Purchase Reference": ref,
+          "Item Name": li.name,
+          Category: li.category ?? "",
+          Quantity: String(li.quantity),
+          "Unit Price": formatMoney(li.price.cents),
+          "Line Total": formatMoney(
+            li.discountAmount.cents
+              ? li.price.cents * li.quantity - li.discountAmount.cents
+              : li.price.cents * li.quantity,
+          ),
+          Currency: order.currency,
+          "Purchase Date": new Date(order.createdTime).toISOString(),
+          "Clover Order ID": order.id,
+          "Clover Line Item ID": li.id,
+          "Clover Item ID": li.cloverItemId ?? "",
+          "Clover Merchant ID": order.merchantId,
+          "Clover Customer ID": order.customer?.id ?? "",
+          "Location Name": order.locationName ?? "",
+          "Payment Status": order.paymentStatus,
+        };
+        recordId = await createPurchaseRecord(schema.id, schemaVal.fieldKeyMap, values);
+      }
+
+      // Associate with the contact (idempotent: re-associating is safe).
+      await associateRecordToContact(schema.id, recordId, ghlContactId);
+
+      await logSyncStep({
+        correlationId: `SYNC-${order.id}`,
+        operation: "GHL_OBJECT_CREATE",
+        status: "success",
+        cloverOrderId: order.id,
+        cloverCustomerId: order.customer?.id ?? null,
+        cloverItemId: li.cloverItemId ?? null,
+        purchaseReference: ref,
+        ghlContactId,
+        ghlObjectRecordId: recordId,
+        details: { itemName: li.name },
+      });
+
+      // ---- Apply + verify the purchase tag on the GHL contact ----
+      const tagResult = await applyPurchaseTag(ghlContactId, li.name);
+      let verificationStatus: "verified" | "failed" | "out_of_sync" = "failed";
+      if (tagResult.status === "applied" || tagResult.status === "already_tagged") {
+        const verify = await verifyPurchaseTag(ghlContactId, li.name);
+        verificationStatus = verify.status;
+      }
+
+      await logSyncStep({
+        correlationId: `SYNC-${order.id}`,
+        operation: "GHL_TAG_VERIFIED",
+        status: verificationStatus === "verified" ? "success" : "warning",
+        cloverOrderId: order.id,
+        cloverCustomerId: order.customer?.id ?? null,
+        ghlContactId,
+        ghlTagName: purchaseTagLabel(li.name),
+        details: { tagStatus: tagResult.status, verificationStatus },
+      });
+
+      // Record the tag result in purchase_tags (idempotent upsert by
+      // clover_customer_id + normalized_item_name).
+      const normalizedItem = normalizeItemName(li.name);
+      const tagLabel = purchaseTagLabel(li.name);
+      const sb = getSupabaseServer();
+      try {
+        const { data: existing } = await sb
           .from("purchase_tags")
-          .update({
+          .select("id, attempt_count")
+          .eq("clover_customer_id", order.customer?.id ?? "")
+          .eq("normalized_item_name", normalizedItem)
+          .maybeSingle();
+        if (existing) {
+          await sb
+            .from("purchase_tags")
+            .update({
+              ghl_contact_id: ghlContactId,
+              tag_label: tagLabel,
+              clover_item_id: li.cloverItemId,
+              status: tagResult.status === "error" ? "error" : "applied",
+              verification_status: verificationStatus,
+              verified_at: verificationStatus === "verified" ? new Date().toISOString() : null,
+              attempt_count: (existing.attempt_count ?? 0) + 1,
+              last_attempt_at: new Date().toISOString(),
+              error: tagResult.error,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", existing.id);
+        } else {
+          await sb.from("purchase_tags").insert({
+            clover_merchant_id: order.merchantId,
+            clover_customer_id: order.customer?.id ?? "",
             ghl_contact_id: ghlContactId,
+            normalized_item_name: normalizedItem,
             tag_label: tagLabel,
             clover_item_id: li.cloverItemId,
             status: tagResult.status === "error" ? "error" : "applied",
             verification_status: verificationStatus,
             verified_at: verificationStatus === "verified" ? new Date().toISOString() : null,
-            attempt_count: (existing.attempt_count ?? 0) + 1,
+            attempt_count: 1,
             last_attempt_at: new Date().toISOString(),
             error: tagResult.error,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", existing.id);
-      } else {
-        await sb.from("purchase_tags").insert({
-          clover_merchant_id: order.merchantId,
-          clover_customer_id: order.customer?.id ?? "",
-          ghl_contact_id: ghlContactId,
-          normalized_item_name: normalizedItem,
-          tag_label: tagLabel,
-          clover_item_id: li.cloverItemId,
-          status: tagResult.status === "error" ? "error" : "applied",
-          verification_status: verificationStatus,
-          verified_at: verificationStatus === "verified" ? new Date().toISOString() : null,
-          attempt_count: 1,
-          last_attempt_at: new Date().toISOString(),
-          error: tagResult.error,
-        });
+          });
+        }
+      } catch (tagDbErr: any) {
+        // FIX #24: Tag tracking is best-effort but failures are now logged.
+        console.warn(
+          `[sync] purchase_tags upsert failed for item "${li.name}": ${tagDbErr?.message ?? String(tagDbErr)}`,
+        );
       }
-    } catch {
-      // Tag tracking is best-effort; the GHL tag itself is the source of truth.
-    }
 
-    // Save progress after each successful step.
-    await upsertOrderItem({
-      order_id: orderRowId,
-      clover_line_item_id: li.id,
-      clover_item_id: li.cloverItemId,
-      purchase_reference: ref,
-      ghl_record_id: recordId,
-      item_name: li.name,
-      category: li.category,
-      quantity: li.quantity,
-      unit_price_cents: li.price.cents,
-      line_total_cents: li.discountAmount.cents
-        ? Math.max(0, li.price.cents * li.quantity - li.discountAmount.cents)
-        : li.price.cents * li.quantity,
-      currency: order.currency,
-      payment_status: order.paymentStatus,
-      status: "synced",
-      flag: null,
-    });
-    purchaseRecordIds.push(recordId);
-    itemsSynced += 1;
+      // Save progress after each successful step.
+      await upsertOrderItem({
+        order_id: orderRowId,
+        clover_line_item_id: li.id,
+        clover_item_id: li.cloverItemId,
+        purchase_reference: ref,
+        ghl_record_id: recordId,
+        item_name: li.name,
+        category: li.category,
+        quantity: li.quantity,
+        unit_price_cents: li.price.cents,
+        line_total_cents: li.discountAmount.cents
+          ? Math.max(0, li.price.cents * li.quantity - li.discountAmount.cents)
+          : li.price.cents * li.quantity,
+        currency: order.currency,
+        payment_status: order.paymentStatus,
+        status: "synced",
+        flag: null,
+      });
+      purchaseRecordIds.push(recordId);
+      itemsSynced += 1;
+    } catch (itemErr: any) {
+      // FIX #2/#3: Increment itemsHeld and save the item as held for retry without failing the rest of the order.
+      console.warn(
+        `[sync] Line item ${li.id} ("${li.name}") failed: ${itemErr?.message ?? String(itemErr)}`,
+      );
+      const ref = purchaseReference(order.merchantId, order.id, li.id);
+      await upsertOrderItem({
+        order_id: orderRowId,
+        clover_line_item_id: li.id,
+        clover_item_id: li.cloverItemId,
+        purchase_reference: ref,
+        ghl_record_id: null,
+        item_name: li.name,
+        category: li.category,
+        quantity: li.quantity,
+        unit_price_cents: li.price.cents,
+        line_total_cents: li.discountAmount.cents
+          ? Math.max(0, li.price.cents * li.quantity - li.discountAmount.cents)
+          : li.price.cents * li.quantity,
+        currency: order.currency,
+        payment_status: order.paymentStatus,
+        status: "held",
+        flag: (itemErr?.message ?? String(itemErr)).slice(0, 200),
+      }).catch(() => {});
+      itemsHeld += 1;
+    }
   }
 
   // Mark the order as processed by the purchase-mapping pipeline.

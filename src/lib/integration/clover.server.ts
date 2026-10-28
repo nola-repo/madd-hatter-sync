@@ -173,7 +173,7 @@ export async function fetchCloverOrder(orderId: string): Promise<CloverOrder> {
       centsFromValue(li.discounts?.elements?.[0]?.amount ?? li.discountAmount),
       currency,
     );
-    const lineTotal = computeLineTotal(unit, qty, modifiers, discountAmount.cents);
+    const lineTotal = computeLineTotal(unit, qty, modifiers, discountAmount.cents, currency);
     return {
       id: li.id,
       name: li.name ?? "Item",
@@ -184,6 +184,7 @@ export async function fetchCloverOrder(orderId: string): Promise<CloverOrder> {
       discountAmount,
       cloverItemId: li.item?.id ?? li.itemId ?? null,
       category: li.categoryName ?? li.category ?? null,
+      lineTotal,
     };
   });
 
@@ -223,11 +224,12 @@ function computeLineTotal(
   qty: number,
   modifiers: { amount: CloverMoney }[],
   discountCents: number,
+  currency: string,
 ): CloverMoney {
   const modSum = modifiers.reduce((s, m) => s + m.amount.cents, 0);
   const gross = unitCents * qty + modSum;
   const net = Math.max(0, gross - discountCents);
-  return { cents: net, currency: "USD" };
+  return { cents: net, currency };
 }
 
 function derivePaymentStatus(order: any, payments: any[]): CloverOrder["paymentStatus"] {

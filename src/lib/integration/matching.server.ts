@@ -215,15 +215,13 @@ export async function matchCustomer(order: CloverOrder): Promise<CustomerMatchPr
     };
   }
 
-  // 3. No match, but we have usable identifying info.
-  // The centralized CustomerMatchService never creates GHL contacts for
-  // unmatched Clover customers, so the preview must not promise creation
-  // (which was misleading). Hold for review instead.
+  // 3. No match — the sync path will auto-create a GHL contact to preserve
+  // the purchase. Preview accurately reflects this so users aren't surprised.
   if (email || phone) {
     return {
-      decision: "held_for_review",
+      decision: "auto_create",
       reason:
-        "No existing GHL contact matches this customer's email or phone. The customer will be preserved as unmatched — no GHL contact or records are created.",
+        "No existing GHL contact found. Sync will automatically create one so no purchase data is lost.",
       ghlContactId: null,
       candidates: [],
     };

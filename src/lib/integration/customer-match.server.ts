@@ -19,6 +19,7 @@ import {
   searchContactsByEmail,
   searchContactsByPhone,
   createGhlContact,
+  getGhlContactById,
   type GhlContact,
 } from "./ghl.server";
 
@@ -145,16 +146,67 @@ export async function matchCloverCustomerToGhlContact(input: {
     .maybeSingle();
 
   if (mapping && mapping.ghl_contact_id) {
-    // We trust a previously verified mapping. It was only ever saved for a
-    // confident match, so we reuse it without re-querying GHL every time.
-    return {
-      status: "VERIFIED_MAPPING",
-      ghlContactId: mapping.ghl_contact_id,
-      matchMethod: "mapping",
-      evidence: buildEvidence(email, phone, [], []),
-      reason: `Reused verified mapping (originally matched by ${mapping.matched_by ?? "unknown"}).`,
-      confident: true,
-    };
+    // FIX #7: Perform a liveness check if the mapping hasn't been verified recently
+    // (> 7 days). This catches cases where the GHL contact was deleted after mapping.
+    const lastChecked = (mapping as any).last_checked_at
+      ? new Date((mapping as any).last_checked_at).getTime()
+      : 0;
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+    const needsLivenessCheck = Date.now() - lastChecked > sevenDaysMs;
+
+    if (needsLivenessCheck) {
+      try {
+        const contact = await getGhlContactById(mapping.ghl_contact_id);
+        if (!contact) {
+          // GHL contact was deleted — invalidate the stale mapping so we re-match.
+          console.warn(
+            `[customer-match] Cached mapping for ${input.cloverCustomerId} points to deleted ` +
+              `GHL contact ${mapping.ghl_contact_id}. Invalidating and re-matching.`,
+          );
+          await sb
+            .from("customer_mappings")
+            .delete()
+            .eq("clover_merchant_id", cfg.clover.merchantId)
+            .eq("clover_customer_id", input.cloverCustomerId!);
+          // Fall through to re-match below.
+        } else {
+          // Contact still exists — refresh last_checked_at and reuse mapping.
+          await sb
+            .from("customer_mappings")
+            .update({ last_checked_at: new Date().toISOString() })
+            .eq("clover_merchant_id", cfg.clover.merchantId)
+            .eq("clover_customer_id", input.cloverCustomerId!);
+          return {
+            status: "VERIFIED_MAPPING",
+            ghlContactId: mapping.ghl_contact_id,
+            matchMethod: "mapping",
+            evidence: buildEvidence(email, phone, [], []),
+            reason: `Reused verified mapping (originally matched by ${mapping.matched_by ?? "unknown"}, liveness confirmed).`,
+            confident: true,
+          };
+        }
+      } catch {
+        // Liveness check failed (e.g. GHL API down) — trust the cached mapping
+        return {
+          status: "VERIFIED_MAPPING",
+          ghlContactId: mapping.ghl_contact_id,
+          matchMethod: "mapping",
+          evidence: buildEvidence(email, phone, [], []),
+          reason: `Reused verified mapping (liveness check unavailable — proceeding with caution).`,
+          confident: true,
+        };
+      }
+    } else {
+      // Within the 7-day TTL window — trust the cached mapping directly.
+      return {
+        status: "VERIFIED_MAPPING",
+        ghlContactId: mapping.ghl_contact_id,
+        matchMethod: "mapping",
+        evidence: buildEvidence(email, phone, [], []),
+        reason: `Reused verified mapping (originally matched by ${mapping.matched_by ?? "unknown"}).`,
+        confident: true,
+      };
+    }
   }
 
   // Instance A: Total Anonymity — No email, no phone, no name (or no identifiers at all).

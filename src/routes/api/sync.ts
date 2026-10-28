@@ -212,8 +212,10 @@ async function handleWebhookEvent(body: any, cfg: ReturnType<typeof getIntegrati
     return Response.json({ ok: true, action: "fetch_and_push", event: eventType });
   }
 
-  // For order events: sync this specific order immediately.
-  if (eventType === "ORDER" || eventType.includes("ORDER") || objectId.length > 0) {
+  // FIX #10: For order events: sync this specific order immediately.
+  // Previously `|| objectId.length > 0` caused non-order events (customer, inventory)
+  // to be passed to syncOrderToGhl as order IDs.
+  if (eventType === "ORDER" || eventType.startsWith("ORDER_") || eventType.includes("ORDER")) {
     const result = await syncOrderToGhl(objectId).catch((e) => ({
       outcome: "error" as const,
       error: e?.message ?? String(e),
