@@ -44,7 +44,11 @@ export function resolveAudience(id: AudienceId, customers: CustomerAgg[]): Set<s
       case "brunch_buyers":
         match = c.orders.some((o) => {
           if (!isDow(o.created_time, 0) && !isDow(o.created_time, 6)) return false;
-          const oi = c.items.filter((it) => it.clover_order_id === o.clover_order_id);
+          const oi = c.items.filter(
+            (it) =>
+              (it.order_id && it.order_id === o.id) ||
+              (it.clover_order_id && it.clover_order_id === o.clover_order_id),
+          );
           return oi.some((it) => matchesProduct(it.item_name, BRUNCH_KEYWORDS));
         });
         break;
