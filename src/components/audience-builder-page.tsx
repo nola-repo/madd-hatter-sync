@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -17,9 +17,10 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
-import { getAudienceCatalogFn, buildAudienceFn } from "@/lib/integration/audience.functions";
+import { buildAudienceFn } from "@/lib/integration/audience.functions";
 import type { AudienceResult } from "@/lib/integration/audience-build.server";
 import { toCsv, downloadCsv } from "@/lib/csv-export";
+import { AUDIENCE_CATALOG } from "@/lib/audience-catalog";
 import {
   RuleRow,
   AddCondition,
@@ -38,10 +39,9 @@ function formatDate(ms: number): string {
 }
 
 export function AudienceBuilderPage() {
-  const catalogFn = useServerFn(getAudienceCatalogFn);
   const runFn = useServerFn(buildAudienceFn);
 
-  const [catalog, setCatalog] = useState<AudienceMeta[]>([]);
+  const catalog: AudienceMeta[] = AUDIENCE_CATALOG;
   const [andAudiences, setAndAudiences] = useState<string[]>([]);
   const [orGroups, setOrGroups] = useState<string[][]>([[]]);
   const [result, setResult] = useState<AudienceResult | null>(null);
@@ -51,18 +51,6 @@ export function AudienceBuilderPage() {
   // Tracks whether the user changed conditions since the last build, so we
   // can mark displayed results as stale instead of hiding them.
   const [stale, setStale] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    void catalogFn()
-      .then((r) => {
-        if (!cancelled) setCatalog(r.audiences as AudienceMeta[]);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [catalogFn]);
 
   const runSearch = useCallback(async () => {
     setLoading(true);
